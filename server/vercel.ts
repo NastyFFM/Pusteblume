@@ -7,8 +7,15 @@ export async function runVercel(
   res: ServerResponse,
   handler: (r: ApiRequest) => Promise<ApiResponse>,
 ) {
+  // Vercel liest den Body bereits vorab und legt ihn als req.body ab (String oder geparstes Objekt).
+  // Nur wenn das fehlt, den Stream selbst lesen.
+  const pre = (req as IncomingMessage & { body?: unknown }).body;
   let body = "";
-  for await (const chunk of req) body += chunk;
+  if (typeof pre === "string") body = pre;
+  else if (pre && typeof pre === "object") body = JSON.stringify(pre);
+  else if (pre === undefined && !req.readableEnded) {
+    for await (const chunk of req) body += chunk;
+  }
 
   const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
   const host = (req.headers["x-forwarded-host"] as string | undefined) ?? req.headers.host ?? "localhost";

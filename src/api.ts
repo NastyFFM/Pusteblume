@@ -4,10 +4,25 @@ import { encodeCard } from "../shared/link";
 /** Kurzlinks über die API nur, wenn ausdrücklich aktiviert (VITE_SHORT_LINKS=true). Sonst reiner Frontend-Link. */
 export const SHORT_LINKS_ENABLED = import.meta.env.VITE_SHORT_LINKS === "true";
 
-/** Erzeugt den Link zu einer Karte: Kurzlink per API oder vollständig kodierter Frontend-Link. */
-export async function createCardLink(card: CardData): Promise<string> {
-  if (SHORT_LINKS_ENABLED) return (await createCard(card)).url;
-  return `${location.origin}/v/${encodeCard(card)}`;
+export interface CardLink {
+  url: string;
+  /** Hinweis, wenn statt Kurzlink der vollständige Link erzeugt wurde. */
+  note?: string;
+}
+
+/**
+ * Erzeugt den Link zu einer Karte: Kurzlink per API, wenn aktiviert und erreichbar,
+ * sonst der vollständig kodierte Frontend-Link, der immer funktioniert.
+ */
+export async function createCardLink(card: CardData): Promise<CardLink> {
+  const fallback = `${location.origin}/v/${encodeCard(card)}`;
+  if (!SHORT_LINKS_ENABLED) return { url: fallback };
+  try {
+    return { url: (await createCard(card)).url };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return { url: fallback, note: `Kurzlink-Dienst nicht erreichbar (${reason}). Stattdessen vollständiger Link erstellt.` };
+  }
 }
 
 async function parse<T>(res: Response): Promise<T> {
@@ -32,6 +47,9 @@ export async function createCard(card: CardData): Promise<{ id: string; url: str
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(card),
+    signal: AbortSignal.timeout(12_000),
+  }).catch((err: unknown) => {
+    throw new Error(err instanceof Error && err.name === "TimeoutError" ? "Zeitüberschreitung" : "Netzwerkfehler");
   });
   return parse(res);
 }

@@ -71,12 +71,14 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
   const resultLink = h("a", { class: "result__link", href: "#", target: "_blank", rel: "noopener" });
   const copyBtn = h("button", { type: "button", class: "btn btn--ghost" }, "Link kopieren");
   const shareBtn = h("button", { type: "button", class: "btn btn--primary" }, "Teilen");
+  const resultNote = h("p", { class: "result__note", hidden: true });
   const result = h(
     "div",
     { class: "result", hidden: true },
     h("h2", { class: "result__title" }, "Deine Karte ist fertig 🌹"),
     h("p", {}, "Schick diesen Link per WhatsApp, Mail oder Nachricht. Am Handy pusten, fertig."),
     resultLink,
+    resultNote,
     h("div", { class: "row" }, copyBtn, shareBtn),
   );
 
@@ -107,7 +109,9 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
         submitBtn.disabled = true;
         submitBtn.textContent = "Wird erstellt …";
         try {
-          const url = await createCardLink(card);
+          const { url, note } = await createCardLink(card);
+          resultNote.hidden = !note;
+          resultNote.textContent = note ?? "";
           resultLink.textContent = url;
           resultLink.setAttribute("href", url);
           result.hidden = false;
