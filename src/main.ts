@@ -6,17 +6,39 @@ import { mountEditorView } from "./ui/editor-view";
 
 const app = document.getElementById("app")!;
 const PREVIEW_KEY = "pusteblume:preview";
+const DRAFT_KEY = "pusteblume:draft";
+
+function readJson<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Speicher nicht verfügbar (z. B. privater Modus): Entwurf geht dann beim Neuladen verloren.
+  }
+}
 
 let activeView: { destroy(): void } | null = null;
 
-function showEditor(initial?: Partial<CardData>) {
+function showEditor() {
   activeView?.destroy();
   activeView = null;
   document.title = "Pusteblume · Interaktive Grußkarte";
   mountEditorView(app, {
-    initial,
+    // Entwurf wiederherstellen: nach Vorschau, Zurück-Navigation oder Neuladen.
+    initial: readJson<Partial<CardData>>(DRAFT_KEY) ?? undefined,
+    onChange(draft) {
+      writeJson(DRAFT_KEY, draft);
+    },
     onPreview(card) {
-      sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(card));
+      writeJson(PREVIEW_KEY, card);
       history.pushState({}, "", "/preview");
       route();
     },
@@ -56,9 +78,9 @@ function route() {
   if (path === "/") return showEditor();
 
   if (path === "/preview") {
-    const raw = sessionStorage.getItem(PREVIEW_KEY);
-    if (!raw) return showEditor();
-    return showCard(JSON.parse(raw) as CardData, { preview: true });
+    const card = readJson<CardData>(PREVIEW_KEY);
+    if (!card) return showEditor();
+    return showCard(card, { preview: true });
   }
 
   // Frontend-Link: Karte steckt vollständig in der URL.

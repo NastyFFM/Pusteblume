@@ -95,7 +95,7 @@ p { margin: 0; }
   gap: 0.75rem; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom)); position: relative; min-height: 100dvh;
   touch-action: none;
 }
-.card__back { justify-self: start; }
+.card__back { justify-self: start; position: relative; z-index: 3; }
 .card__stage {
   --size: min(92vw, 62dvh, 520px);
   width: var(--size); aspect-ratio: 1; position: relative; display: grid; place-items: center;

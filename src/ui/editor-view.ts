@@ -9,6 +9,8 @@ const COLOR_LABELS: Record<RoseColor, string> = { red: "Rot", white: "Weiß", ye
 export interface EditorOptions {
   initial?: Partial<CardData>;
   onPreview(card: CardData): void;
+  /** Wird bei jeder Eingabe aufgerufen, um den Entwurf zu sichern. */
+  onChange?(draft: CardData): void;
 }
 
 export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
@@ -32,6 +34,7 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
         onClick: () => {
           state.color = color;
           rose.setColor(color);
+          opts.onChange?.(state);
           preview.className = `editor__preview card--${color}`;
           for (const s of swatches) {
             const active = s.classList.contains(`swatch--${color}`);
@@ -55,13 +58,17 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
   message.value = state.message;
   message.addEventListener("input", () => {
     state.message = message.value;
+    opts.onChange?.(state);
     counter.textContent = `${message.value.length} / ${LIMITS.message}`;
   });
   counter.textContent = `${message.value.length} / ${LIMITS.message}`;
 
   const from = h("input", { id: "from", class: "field__input", type: "text", maxlength: LIMITS.from, placeholder: "Dein Name (optional)" }) as HTMLInputElement;
   from.value = state.from ?? "";
-  from.addEventListener("input", () => (state.from = from.value));
+  from.addEventListener("input", () => {
+    state.from = from.value;
+    opts.onChange?.(state);
+  });
 
   const error = h("p", { class: "form__error", role: "alert", hidden: true });
 
