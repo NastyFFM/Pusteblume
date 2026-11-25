@@ -1,8 +1,19 @@
 import type { CardData, StoredCard } from "../shared/card";
 
 async function parse<T>(res: Response): Promise<T> {
-  const data = (await res.json().catch(() => ({}))) as { error?: string } & T;
-  if (!res.ok) throw new Error(data.error ?? `Fehler ${res.status}`);
+  const text = await res.text();
+  let data: ({ error?: string } & T) | null = null;
+  try {
+    data = JSON.parse(text) as { error?: string } & T;
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    // Plattformfehler (z. B. abgestürzte Function) liefern kein JSON: Rohtext gekürzt anzeigen.
+    const detail = data?.error ?? text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    throw new Error(detail ? `Fehler ${res.status}: ${detail}` : `Fehler ${res.status}`);
+  }
+  if (!data) throw new Error("Ungültige Antwort vom Server.");
   return data;
 }
 
