@@ -4,7 +4,7 @@ Interaktive, mobile Grußkarten: Eine Rose verdeckt eine persönliche Botschaft.
 Der Empfänger pustet ins Mikrofon des Handys, die Blütenblätter fliegen davon
 (je kräftiger, desto wilder) und die Botschaft liegt frei.
 
-Die App läuft rein im Frontend, ohne Server und ohne Datenbank.
+Die App läuft rein im Frontend, ohne Server und ohne Datenbank. Production-Branch ist `main`.
 
 ## Was drin ist
 
