@@ -1,15 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
-    "lib": ["ES2022"],
-    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "isolatedModules": true,
+    "types": ["vite/client"]
   },
-  "include": ["api", "server", "shared"]
+  "include": ["src", "shared", "vite.config.mts"]
 }

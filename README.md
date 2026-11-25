@@ -4,45 +4,40 @@ Interaktive, mobile Grußkarten: Eine Rose verdeckt eine persönliche Botschaft.
 Der Empfänger pustet ins Mikrofon des Handys, die Blütenblätter fliegen davon
 (je kräftiger, desto wilder) und die Botschaft liegt frei.
 
+Die App läuft rein im Frontend, ohne Server und ohne Datenbank.
+
 ## Was drin ist
 
-- **Editor** (`/`): Rosenfarbe (rot, weiß, gelb), Botschaft, Absender, Vorschau, Kurzlink erzeugen, kopieren oder teilen.
-- **Karte** (`/c/:id`): Rose über der Botschaft, Pust-Erkennung per Web Audio API, Fallback per Wischen (ohne Mikrofon) und Leertaste (Desktop).
-- **Links**: Standardmäßig steckt die Karte komplett im Link (`/v/<kodierte Karte>`), es wird kein Backend gebraucht.
-  Kurzlinks über `POST /api/cards` (`/c/<id>`) lassen sich mit der Build-Variable `VITE_SHORT_LINKS=true` einschalten.
+- **Editor** (`/`): Rosenfarbe (rot, weiß, gelb), Botschaft, Absender, Vorschau, Link erzeugen, kopieren oder teilen.
+- **Karte** (`/v/<kodierte Karte>`): Rose über der Botschaft, Pust-Erkennung per Web Audio API,
+  Fallback per Wischen (ohne Mikrofon) und Leertaste (Desktop).
+- **Links**: Die Karte steckt vollständig im Link (base64url-kodiertes JSON). Nichts wird gespeichert.
 - **Rose**: aktuell prozedurales SVG (Blütenblatt-Pfade in Ringen, Herzscheibe, Blätter in eigener Ebene hinter der Botschaft).
 
 ## Entwicklung
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173, API läuft im Vite-Dev-Server mit Datei-Store (.data/cards.json)
-npm test           # Vitest (API-Handler)
-npm run typecheck  # Client + Server
+npm run dev        # http://localhost:5173
+npm test           # Vitest
+npm run typecheck
 npm run build
 ```
 
 Das Mikrofon funktioniert im Browser nur über HTTPS oder `localhost`. Zum Testen am Handy
-im lokalen Netz daher einen Tunnel (z. B. `vercel dev` + `ngrok`) oder direkt ein Vercel-Preview-Deployment nutzen.
+daher am einfachsten ein Vercel-Preview-Deployment nutzen.
 
 ## Deployment (Vercel)
 
-Ohne weitere Einstellungen läuft die App rein statisch mit Frontend-Links. Für Kurzlinks:
+Projekt mit Vercel verbinden, Framework Vite. `vercel.json` leitet alle Pfade auf die SPA um. Mehr ist nicht nötig.
 
-0. `VITE_SHORT_LINKS=true` als Environment-Variable setzen. `/api/health` zeigt, ob Functions laufen und Redis erkannt wird.
-1. Projekt mit Vercel verbinden (Framework: Vite, `vercel.json` liegt bei).
-2. Im Vercel Marketplace **Upstash for Redis** zum Projekt hinzufügen. Das setzt `KV_REST_API_URL` und `KV_REST_API_TOKEN`
-   automatisch (alternativ `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Karten werden mit einem Jahr TTL gespeichert (Ablauf nach einem Jahr).
-3. Optional `PUBLIC_BASE_URL` setzen, wenn Kurzlinks auf eine eigene Domain zeigen sollen.
-
-Ohne Redis-Variablen antwortet die API auf Vercel mit einem Hinweis-Fehler; lokal wird `.data/cards.json` benutzt.
+Kurzlinks mit Datenbank (Vercel Functions + Upstash Redis) waren in einer früheren Version enthalten
+(siehe Git-Historie bis Commit `e69aa2e`) und lassen sich bei Bedarf wieder aktivieren.
 
 ## Projektstruktur
 
 ```
-api/            Vercel Functions (dünne Adapter)
-server/         Handler, Store (Redis/Datei), ID-Erzeugung, Tests
-shared/         Datenmodell + Validierung (Client und Server)
+shared/         Datenmodell, Validierung, Link-Kodierung (+ Tests)
 src/rose/       Rosenmodell (model.ts), SVG-Renderer, Pust-Physik
 src/blow/       Mikrofon-Erkennung und Gesten-Fallback
 src/ui/         Editor- und Kartenansicht
