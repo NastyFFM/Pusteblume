@@ -32,6 +32,7 @@ export class RoseSvg {
   private readonly petalGroups = new Map<number, SVGGElement>();
   private readonly defs: SVGDefsElement;
   private readonly petalLayer: SVGGElement;
+  private backing!: SVGCircleElement;
   private color: RoseColor;
 
   constructor(
@@ -53,6 +54,9 @@ export class RoseSvg {
 
     this.backEl = el("svg", { viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`, class: "rose rose--back", "aria-hidden": "true" });
     this.backEl.appendChild(this.buildLeaves());
+    // Deckscheibe hinter den Blättern: verdeckt Lücken zwischen Sprites, blendet mit dem Fortschritt aus.
+    this.backing = el("circle", { class: "rose__backing", cx: 0, cy: 0, r: model.radius * 0.62, fill: "url(#backing-grad)" });
+    this.el.appendChild(this.backing);
     this.petalLayer = el("g", { class: "rose__petals" });
     this.el.appendChild(this.petalLayer);
     this.buildPetals();
@@ -90,6 +94,12 @@ export class RoseSvg {
     );
   }
 
+  /** Fortschritt 0..1 (Anteil gelöster Blätter): Deckscheibe ab 55 % ausblenden. */
+  setProgress(progress: number) {
+    const o = 1 - Math.max(0, Math.min(1, (progress - 0.55) / 0.35));
+    this.backing.style.opacity = o.toFixed(3);
+  }
+
   /** Leichtes Zittern eines sitzenden Blatts (Feedback beim sanften Pusten). */
   setTremble(petal: Petal, degrees: number) {
     const g = this.petalGroups.get(petal.id);
@@ -121,10 +131,17 @@ export class RoseSvg {
     const leaf = el("linearGradient", { id: "leaf-grad", x1: 0, y1: 1, x2: 0, y2: 0 });
     leaf.append(el("stop", { offset: 0, "stop-color": "#1d4a24" }), el("stop", { offset: 1, "stop-color": "#4f8a3e" }));
 
+    const backing = el("radialGradient", { id: "backing-grad" });
+    backing.append(
+      el("stop", { offset: 0, "stop-color": pal.heart }),
+      el("stop", { offset: 0.8, "stop-color": pal.deep }),
+      el("stop", { offset: 1, "stop-color": pal.deep, "stop-opacity": 0 }),
+    );
+
     const shadow = el("filter", { id: "petal-shadow", x: "-30%", y: "-30%", width: "160%", height: "160%" });
     shadow.append(el("feDropShadow", { dx: 0, dy: 1.2, stdDeviation: 1.4, "flood-color": pal.heart, "flood-opacity": 0.45 }));
 
-    this.defs.append(outer, inner, leaf, shadow);
+    this.defs.append(outer, inner, leaf, backing, shadow);
     this.el.style.setProperty("--rim", pal.rim);
     this.el.style.setProperty("--deep", pal.deep);
   }

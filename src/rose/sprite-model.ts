@@ -12,8 +12,8 @@ import { createRoseModel, type Petal, type RoseModel } from "./model";
 export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color: RoseColor, seed = 7): RoseModel {
   const base = createRoseModel(seed);
   const url = baseUrl + (atlas.images[color] ?? atlas.images.red ?? "");
-  // Sprites nach Länge sortieren: kurze/schmale nach innen, lange nach außen.
-  const sorted = [...atlas.sprites].sort((a, b) => a.length / Math.max(1, a.width) - b.length / Math.max(1, b.width) || a.length - b.length);
+  // Sprites sortieren: schmale, eingerollte (hohe Länge/Breite) nach innen, breite offene nach außen.
+  const sorted = [...atlas.sprites].sort((a, b) => b.length / Math.max(1, b.width) - a.length / Math.max(1, a.width) || a.length - b.length);
   const rings = Math.max(...base.petals.map((p) => p.ring)) + 1;
 
   const petals: Petal[] = base.petals.map((p) => {
@@ -41,9 +41,12 @@ export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color:
   return { ...base, petals };
 }
 
-/** Blattlänge je Ring in Modell-Einheiten (entspricht RINGS[].height in model.ts). */
+/**
+ * Blattlänge je Ring in Modell-Einheiten. Innen größer als beim SVG-Modell, weil echte
+ * Innenblätter eingerollt und schmal sind und sich so in der Mitte überlappen müssen.
+ */
 function ringHeight(ring: number): number {
-  return [17, 25, 33, 43, 53, 61, 66][ring] ?? 60;
+  return [34, 40, 46, 52, 57, 62, 66][ring] ?? 60;
 }
 
 export async function loadAtlas(name: string): Promise<{ atlas: PetalAtlas; baseUrl: string }> {

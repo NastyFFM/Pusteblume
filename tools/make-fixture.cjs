@@ -38,7 +38,7 @@ function petalPath(h, openness) {
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cols * cell}" height="${rows * cell}">
     <defs><linearGradient id="g" x1="0" y1="1" x2="0" y2="0">
-      <stop offset="0" stop-color="#5a0716"/><stop offset="0.35" stop-color="#a30f2a"/><stop offset="0.75" stop-color="#d61f42"/><stop offset="1" stop-color="#ef5a74"/>
+      <stop offset="0" stop-color="#f9e2b0"/><stop offset="0.12" stop-color="#8a0a22"/><stop offset="0.35" stop-color="#a30f2a"/><stop offset="0.75" stop-color="#d61f42"/><stop offset="1" stop-color="#ef5a74"/>
     </linearGradient></defs>
     <rect width="100%" height="100%" fill="#fdfbf8"/>${shapes}</svg>`;
 

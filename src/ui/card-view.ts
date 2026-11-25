@@ -99,6 +99,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
       else if (Math.abs(tremble) > 0.01) rose.setTremble(petal, tremble);
       else rose.setPose(petal);
     });
+    rose.setProgress(physics.progress);
     raf = requestAnimationFrame(frame);
   }
 
@@ -137,6 +138,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
   again.addEventListener("click", async () => {
     physics.reset();
     for (const p of model.petals) rose.setPose(p);
+    rose.setProgress(0);
     view.classList.remove("card--revealed");
     done.hidden = true;
     if (mode === "mic") {

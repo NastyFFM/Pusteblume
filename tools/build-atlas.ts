@@ -48,7 +48,7 @@ export function buildAtlas(inputPath: string, outDir: string, opts: BuildOptions
       atlas.data[di + 2] = src.data[si + 2]!;
       atlas.data[di + 3] = src.data[si + 3]!;
     }
-    const geo = analyzePetal(blob, src.width);
+    const geo = analyzePetal(blob, src);
     return {
       x: slot.x,
       y: slot.y,

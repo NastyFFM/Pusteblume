@@ -42,7 +42,7 @@ export function recolor(src: Image, tint: RoseTint): Image {
     if (d[i + 3] === 0) continue;
     let [h, s, l] = rgbToHsl(d[i]!, d[i + 1]!, d[i + 2]!);
     if (tint === "yellow") {
-      h = 0.13 + (h > 0.5 ? h - 1 : h) * 0.4; // rot (~0) -> gelb (~0.13), Abweichungen gestaucht
+      h = Math.min(0.145, 0.13 + (h > 0.5 ? h - 1 : h) * 0.4); // rot (~0) -> gelb (~0.13), nie ins Grünliche
       s = Math.min(1, s * 1.05);
       l = Math.min(1, l * 1.08 + 0.04);
     } else {

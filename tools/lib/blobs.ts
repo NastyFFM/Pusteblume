@@ -88,7 +88,7 @@ export interface Blob {
 }
 
 /** Zusammenhängende, nicht transparente Flächen finden (4er-Nachbarschaft). */
-export function findBlobs(img: Image, minArea = 200, alphaThreshold = 40): Blob[] {
+export function findBlobs(img: Image, minArea = 200, alphaThreshold = 96): Blob[] {
   const { width, height, data } = img;
   const label = new Int32Array(width * height).fill(-1);
   const blobs: Blob[] = [];
@@ -199,11 +199,14 @@ function deepestNotch(boundary: { x: number; y: number }[], minDepth: number): {
 
 /**
  * Form eines Blatt-Blobs analysieren.
- * 1. Gibt es eine Kerbe (tiefste Einbuchtung), liegt die Spitze dort und die Achse läuft von der
- *    Kerbe durch den Schwerpunkt; die Basis liegt gegenüber.
- * 2. Sonst: Richtungs-Sweep, bei dem das Ende mit der kleinsten Fläche die Basis ist.
+ * Alle Richtungen (Basis -> Spitze) werden in 3°-Schritten bewertet:
+ *  - Spitzheit: Breite am Basisende im Verhältnis zur Breite am Spitzenende (Blattbasis läuft spitz zu)
+ *  - Kerbe: liegt die tiefste Einbuchtung des Umrisses am Spitzenende, gibt es einen Bonus
+ *  - Länge entlang der Achse als Nebenkriterium
+ * Die beste Richtung liefert Achse, Basis und damit Pivot und Rotation.
  */
-export function analyzePetal(blob: Blob, imageWidth: number): PetalGeometry {
+export function analyzePetal(blob: Blob, img: Image): PetalGeometry {
+  const imageWidth = img.width;
   const n = blob.pixels.length;
   let cx = 0, cy = 0;
   const xs = new Float64Array(n);
@@ -220,8 +223,25 @@ export function analyzePetal(blob: Blob, imageWidth: number): PetalGeometry {
   cx /= n;
   cy /= n;
 
-  const step = n > 20000 ? 7 : 1; // Pixel-Unterabtastung für große Blobs
-  const extent = (ax: number, ay: number) => {
+  const step = n > 20000 ? 5 : 1; // Pixel-Unterabtastung für große Blobs
+  const approxLength = Math.max(blob.w, blob.h);
+
+  // Primärer Hinweis: die helle, entsättigte Blattbasis (bei Rosenblättern sehr zuverlässig).
+  // Die hellsten 4 % der Pixel müssen sich deutlich vom Rest abheben und als Gruppe am Rand liegen.
+  const pale = paleBase(blob, img, cx, cy, approxLength);
+  if (pale) {
+    const theta = Math.atan2(cy - pale.y, cx - pale.x); // Richtung Basis -> Spitze
+    return finishAxis(theta, xs, ys, cx, cy, n, step);
+  }
+
+  const notch = deepestNotch(boundaryPoints(blob, imageWidth), approxLength * 0.035);
+
+  interface Candidate { score: number; theta: number; tMin: number; tMax: number; uMin: number; uMax: number }
+  let best: Candidate | null = null;
+
+  for (let deg = 0; deg < 360; deg += 3) {
+    const theta = (deg * Math.PI) / 180; // Richtung Basis -> Spitze
+    const ax = Math.cos(theta), ay = Math.sin(theta);
     let tMin = Infinity, tMax = -Infinity, uMin = Infinity, uMax = -Infinity;
     for (let i = 0; i < n; i += step) {
       const dx = xs[i]! - cx, dy = ys[i]! - cy;
@@ -231,51 +251,101 @@ export function analyzePetal(blob: Blob, imageWidth: number): PetalGeometry {
       if (u < uMin) uMin = u;
       if (u > uMax) uMax = u;
     }
-    return { tMin, tMax, uMin, uMax };
-  };
-
-  const approxLength = Math.max(blob.w, blob.h);
-  const notch = deepestNotch(boundaryPoints(blob, imageWidth), approxLength * 0.035);
-
-  let theta: number;
-  let baseIsLow: boolean;
-  if (notch) {
-    // Achse: Schwerpunkt -> Kerbe. Spitze liegt bei der Kerbe (positives t).
-    theta = Math.atan2(notch.y - cy, notch.x - cx);
-    baseIsLow = true;
-  } else {
-    let best = { score: -Infinity, theta: 0, baseIsLow: true };
-    for (let deg = 0; deg < 180; deg += 3) {
-      const th = (deg * Math.PI) / 180;
-      const ax = Math.cos(th), ay = Math.sin(th);
-      const e = extent(ax, ay);
-      const length = e.tMax - e.tMin;
-      const band = length * 0.22;
-      let loArea = 0, hiArea = 0;
-      for (let i = 0; i < n; i += step) {
-        const t = (xs[i]! - cx) * ax + (ys[i]! - cy) * ay;
-        if (t < e.tMin + band) loArea++;
-        else if (t > e.tMax - band) hiArea++;
-      }
-      const asym = Math.abs(loArea - hiArea) / Math.max(1, loArea + hiArea);
-      const score = asym + 0.1 * (length / Math.max(1, e.uMax - e.uMin));
-      if (score > best.score) best = { score, theta: th, baseIsLow: loArea <= hiArea };
+    const length = tMax - tMin;
+    const width = uMax - uMin;
+    // Querschnittsbreite in fester Tiefe hinter beiden Enden (10 % und 20 % der Länge).
+    // Eine echte Blattbasis bleibt dort schmal, eine bloße Ecke ist dort schon breit.
+    const slices = [0.1, 0.2].map((f) => ({ t: tMin + length * f, min: Infinity, max: -Infinity }));
+    const tipSlices = [0.1, 0.2].map((f) => ({ t: tMax - length * f, min: Infinity, max: -Infinity }));
+    const half = length * 0.025;
+    for (let i = 0; i < n; i += step) {
+      const dx = xs[i]! - cx, dy = ys[i]! - cy;
+      const t = dx * ax + dy * ay, u = -dx * ay + dy * ax;
+      for (const sl of slices) if (Math.abs(t - sl.t) <= half) { if (u < sl.min) sl.min = u; if (u > sl.max) sl.max = u; }
+      for (const sl of tipSlices) if (Math.abs(t - sl.t) <= half) { if (u < sl.min) sl.min = u; if (u > sl.max) sl.max = u; }
     }
-    theta = best.theta;
-    baseIsLow = best.baseIsLow;
+    const w = (sl: { min: number; max: number }) => (sl.max > sl.min ? sl.max - sl.min : 1);
+    const baseW = (w(slices[0]!) + w(slices[1]!)) / 2;
+    const tipW = (w(tipSlices[0]!) + w(tipSlices[1]!)) / 2;
+    const pointiness = 1 - baseW / Math.max(baseW, tipW); // 0 = beide Enden gleich breit, ->1 = Basis sehr spitz
+
+    let notchBonus = 0;
+    if (notch) {
+      const tNotch = (notch.x - cx) * ax + (notch.y - cy) * ay;
+      if (tNotch > tMax - length * 0.25) notchBonus = Math.min(1, notch.depth / (approxLength * 0.08));
+    }
+
+    const score = pointiness * 1.0 + notchBonus * 0.4 + (length / Math.max(1, width)) * 0.1;
+    if (!best || score > best.score) best = { score, theta, tMin, tMax, uMin, uMax };
   }
 
-  const ax = Math.cos(theta), ay = Math.sin(theta);
-  const { tMin, tMax, uMin, uMax } = extent(ax, ay);
-  const length = tMax - tMin;
-  const tBase = baseIsLow ? tMin : tMax;
-  const dir = baseIsLow ? 1 : -1; // Richtung Basis -> Spitze entlang der Achse
-  const tPivot = tBase + dir * length * 0.03; // 3 % nach innen, damit der Pivot sicher im Blatt liegt
-  const pivot = { x: cx + tPivot * ax, y: cy + tPivot * ay };
+  return finishAxis(best!.theta, xs, ys, cx, cy, n, step);
+}
 
-  const phi = (Math.atan2(dir * ay, dir * ax) * 180) / Math.PI;
+/** Aus einer Achsrichtung (Basis -> Spitze) Pivot, Rotation, Länge und Breite ableiten. */
+function finishAxis(theta: number, xs: Float64Array, ys: Float64Array, cx: number, cy: number, n: number, step: number): PetalGeometry {
+  const ax = Math.cos(theta), ay = Math.sin(theta);
+  let tMin = Infinity, tMax = -Infinity, uMin = Infinity, uMax = -Infinity;
+  for (let i = 0; i < n; i += step) {
+    const dx = xs[i]! - cx, dy = ys[i]! - cy;
+    const t = dx * ax + dy * ay, u = -dx * ay + dy * ax;
+    if (t < tMin) tMin = t;
+    if (t > tMax) tMax = t;
+    if (u < uMin) uMin = u;
+    if (u > uMax) uMax = u;
+  }
+  const length = tMax - tMin;
+  const tPivot = tMin + length * 0.03; // 3 % nach innen, damit der Pivot sicher im Blatt liegt
+  const pivot = { x: cx + tPivot * ax, y: cy + tPivot * ay };
+  const phi = (Math.atan2(ay, ax) * 180) / Math.PI;
   let rotation = -90 - phi;
   rotation = ((((rotation + 180) % 360) + 360) % 360) - 180;
-
   return { pivot, rotation, length, width: uMax - uMin };
+}
+
+/**
+ * Schwerpunkt der hellsten, am wenigsten gesättigten Pixel, falls sie sich klar abheben
+ * und als Gruppe am Rand des Blatts liegen. Sonst null.
+ */
+function paleBase(blob: Blob, img: Image, cx: number, cy: number, approxLength: number): { x: number; y: number } | null {
+  const n = blob.pixels.length;
+  const scores = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = blob.pixels[i]! * 4;
+    const r = img.data[k]! / 255, g = img.data[k + 1]! / 255, b = img.data[k + 2]! / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const sat = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    scores[i] = l * (1 - 0.6 * sat); // hell und blass = hoch
+  }
+  const sorted = Float32Array.from(scores).sort();
+  const median = sorted[Math.floor(n / 2)]!;
+  const cut = sorted[Math.floor(n * 0.96)]!;
+  if (cut - median < 0.06) return null; // kein deutlicher Kontrast
+
+  let sx = 0, sy = 0, count = 0, spread = 0;
+  for (let i = 0; i < n; i++) {
+    if (scores[i]! < cut) continue;
+    const p = blob.pixels[i]!;
+    const x = p % img.width;
+    const y = (p - x) / img.width;
+    sx += x;
+    sy += y;
+    count++;
+  }
+  if (count < 20) return null;
+  sx /= count;
+  sy /= count;
+  for (let i = 0; i < n; i++) {
+    if (scores[i]! < cut) continue;
+    const p = blob.pixels[i]!;
+    const x = p % img.width;
+    const y = (p - x) / img.width;
+    spread += Math.hypot(x - sx, y - sy);
+  }
+  spread /= count;
+  // Die hellen Pixel müssen gebündelt sein (keine Glanzlichter überall) und abseits der Mitte liegen.
+  if (spread > approxLength * 0.2) return null;
+  if (Math.hypot(sx - cx, sy - cy) < approxLength * 0.2) return null;
+  return { x: sx, y: sy };
 }

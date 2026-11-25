@@ -58,20 +58,23 @@ Schritte in `tools/build-atlas.ts`:
 
 1. **Freistellen**: Hintergrundfarbe aus den Bildecken, Flood-Fill von den Rändern, Kanten entmischt (kein heller Saum).
 2. **Blob-Detection**: zusammenhängende Flächen = einzelne Blätter; Krümel werden entfernt, verschmolzene Blätter werden gemeldet.
-3. **Pivot und Ausrichtung** je Blatt: Die Kerbe an der Spitze ist die tiefste Einbuchtung gegenüber der konvexen Hülle.
-   Achse = Schwerpunkt -> Kerbe, Basis gegenüber, Pivot 3 % innerhalb der Basis. Ohne Kerbe entscheidet ein Richtungs-Sweep
-   über die Fläche der Endzonen (spitze Basis = wenig Fläche).
+3. **Pivot und Ausrichtung** je Blatt. Primär über die helle, entsättigte Blattbasis (bei Rosenblättern sehr zuverlässig):
+   Schwerpunkt der hellsten 4 % Pixel = Basis, Achse von dort durch den Blattschwerpunkt. Ohne Farbkontrast entscheidet ein
+   Richtungs-Sweep über Form: Querschnittsbreite 10 und 20 % hinter beiden Enden (echte Basis bleibt schmal, eine Ecke nicht),
+   Bonus, wenn die tiefste Einbuchtung des Umrisses (Kerbe) am Spitzenende liegt, plus Länge. Pivot liegt 3 % innerhalb der Basis.
 4. **Packen** in einen Atlas, Farbvarianten rot / weiß / gelb per Farbton-Verschiebung, `petals.json` mit Ausschnitt,
    Pivot, Rotation, Länge und Breite. `atlas-debug.png` zeigt Pivot (Kreuz) und Achse (Linie) zur Kontrolle.
 
-`tools/lib/fixture.test.ts` prüft Pivot und Winkel gegen die bekannten Werte des synthetischen Sheets.
+`tools/lib/fixture.test.ts` prüft Pivot und Winkel gegen die bekannten Werte des synthetischen Sheets,
+`tools/lib/ai-fixture.test.ts` gegen das ChatGPT-Sheet `tools/fixtures/ai/chatgpt-rose-petals.png` (alle Basen unten).
+Der daraus gebaute Atlas liegt unter `public/rose/rose1/` und ist mit `?rose=rose1` sichtbar.
 
 Im Frontend wählt `?rose=<name>` den Atlas unter `public/rose/<name>/`. Ohne Parameter bleibt die SVG-Rose.
 `src/rose/sprite-model.ts` verteilt die Sprites auf die Ringe (kurze, schmale nach innen), der Renderer schneidet
 jeden Ausschnitt per verschachteltem `<svg viewBox>` aus dem Atlasbild.
 
-**Ausstehend (braucht den Vercel-AI-Gateway-Key):** `tools/generate-petals.ts` erzeugt das Blättersheet per Bildmodell.
-Der Aufruf ist noch ungetestet; danach einfach `npm run atlas -- <bild.png> <name>`.
+Neues Blättersheet ohne Key: Prompt aus `tools/generate-petals.ts` in ChatGPT eingeben, PNG speichern,
+`npm run atlas -- <bild.png> <name>`. Mit Vercel-AI-Gateway-Key erzeugt `tools/generate-petals.ts` das Bild direkt (noch ungetestet).
 
 ## Debug-Haken
 

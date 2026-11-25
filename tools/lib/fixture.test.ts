@@ -26,7 +26,7 @@ describe("Pipeline am Fixture", () => {
       // Blob, in dessen Box der echte Basispunkt liegt
       const blob = blobs.find((b) => t.baseX >= b.x && t.baseX < b.x + b.w && t.baseY >= b.y && t.baseY < b.y + b.h);
       expect(blob).toBeDefined();
-      const g = analyzePetal(blob!, img.width);
+      const g = analyzePetal(blob!, img);
       const pivotErr = Math.hypot(g.pivot.x - t.baseX, g.pivot.y - t.baseY);
       // Erwartete Rotation macht die Fixture-Drehung rückgängig
       let rotErr = Math.abs(g.rotation - -t.rot) % 360;
