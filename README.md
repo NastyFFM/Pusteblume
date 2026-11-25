@@ -43,16 +43,35 @@ src/blow/       Mikrofon-Erkennung und Gesten-Fallback
 src/ui/         Editor- und Kartenansicht
 ```
 
-## Schritt 2: KI-generierte Rose mit Sprite-Atlas
+## Sprite-Pipeline: Blätter-Bild -> Atlas -> Rose
 
-Das Modell in `src/rose/model.ts` ist dafür vorbereitet: `PetalShape` kennt neben `path`
-bereits die Variante `sprite` (Atlas-URL, Ausschnitt, Pivot). Physik und Interaktion arbeiten nur
-mit Pivot, Winkel, Radius und Größe und bleiben unverändert. Geplante Pipeline:
+Die Rose kann statt aus SVG-Pfaden aus echten Blatt-Bildern gebaut werden. Die Pipeline
+liegt unter `tools/` und läuft komplett lokal:
 
-1. Rosenbild per Vercel AI Gateway erzeugen.
-2. Einzelblüten freistellen und in einen Sprite-Atlas mit transparentem Hintergrund packen.
-3. Blob-Detection pro Sprite, um den Pivot zu bestimmen (die Blüten liegen nicht zentriert im Sprite-Rechteck).
-4. Ergebnis als `Petal[]` mit `shape.kind === "sprite"` laden; der Renderer zeichnet `<image>`-Ausschnitte.
+```bash
+npm run fixture                                   # synthetisches Blättersheet (Ersatz für die KI-Ausgabe)
+npm run atlas -- tools/fixtures/petal-sheet.png demo   # -> public/rose/demo/
+npm run dev                                       # dann http://localhost:5173/?rose=demo
+```
+
+Schritte in `tools/build-atlas.ts`:
+
+1. **Freistellen**: Hintergrundfarbe aus den Bildecken, Flood-Fill von den Rändern, Kanten entmischt (kein heller Saum).
+2. **Blob-Detection**: zusammenhängende Flächen = einzelne Blätter; Krümel werden entfernt, verschmolzene Blätter werden gemeldet.
+3. **Pivot und Ausrichtung** je Blatt: Die Kerbe an der Spitze ist die tiefste Einbuchtung gegenüber der konvexen Hülle.
+   Achse = Schwerpunkt -> Kerbe, Basis gegenüber, Pivot 3 % innerhalb der Basis. Ohne Kerbe entscheidet ein Richtungs-Sweep
+   über die Fläche der Endzonen (spitze Basis = wenig Fläche).
+4. **Packen** in einen Atlas, Farbvarianten rot / weiß / gelb per Farbton-Verschiebung, `petals.json` mit Ausschnitt,
+   Pivot, Rotation, Länge und Breite. `atlas-debug.png` zeigt Pivot (Kreuz) und Achse (Linie) zur Kontrolle.
+
+`tools/lib/fixture.test.ts` prüft Pivot und Winkel gegen die bekannten Werte des synthetischen Sheets.
+
+Im Frontend wählt `?rose=<name>` den Atlas unter `public/rose/<name>/`. Ohne Parameter bleibt die SVG-Rose.
+`src/rose/sprite-model.ts` verteilt die Sprites auf die Ringe (kurze, schmale nach innen), der Renderer schneidet
+jeden Ausschnitt per verschachteltem `<svg viewBox>` aus dem Atlasbild.
+
+**Ausstehend (braucht den Vercel-AI-Gateway-Key):** `tools/generate-petals.ts` erzeugt das Blättersheet per Bildmodell.
+Der Aufruf ist noch ungetestet; danach einfach `npm run atlas -- <bild.png> <name>`.
 
 ## Debug-Haken
 

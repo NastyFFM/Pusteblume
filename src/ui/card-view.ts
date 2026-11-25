@@ -1,14 +1,15 @@
 import type { CardData } from "../../shared/card";
 import { BlowDetector, GestureBlow } from "../blow/detector";
 import { h } from "../dom";
-import { createRoseModel } from "../rose/model";
 import { RosePhysics } from "../rose/physics";
-import { RoseSvg } from "../rose/svg-renderer";
+import { createRose, type RoseStyle } from "../rose/factory";
 
 export interface CardViewOptions {
   /** Zurück-Aktion (z. B. im Vorschau-Modus) */
   onBack?: () => void;
   backLabel?: string;
+  /** Darstellung der Rose: SVG (Standard) oder Sprite-Atlas */
+  style?: RoseStyle;
 }
 
 /** Schriftgröße der Botschaft an die Länge anpassen, damit sie unter der Blüte Platz findet. */
@@ -21,8 +22,7 @@ function messageSizeClass(message: string) {
 }
 
 export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewOptions = {}) {
-  const model = createRoseModel();
-  const rose = new RoseSvg(model, card.color);
+  const { model, rose } = createRose(card.color, opts.style);
   const mic = new BlowDetector();
   const gesture = new GestureBlow();
 

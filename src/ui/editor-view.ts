@@ -1,8 +1,7 @@
 import { LIMITS, ROSE_COLORS, validateCard, type CardData, type RoseColor } from "../../shared/card";
 import { createCardLink } from "../api";
 import { h } from "../dom";
-import { createRoseModel } from "../rose/model";
-import { RoseSvg } from "../rose/svg-renderer";
+import { createRose, type RoseStyle } from "../rose/factory";
 
 const COLOR_LABELS: Record<RoseColor, string> = { red: "Rot", white: "Weiß", yellow: "Gelb" };
 
@@ -11,6 +10,7 @@ export interface EditorOptions {
   onPreview(card: CardData): void;
   /** Wird bei jeder Eingabe aufgerufen, um den Entwurf zu sichern. */
   onChange?(draft: CardData): void;
+  style?: RoseStyle;
 }
 
 export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
@@ -20,8 +20,7 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
     from: opts.initial?.from ?? "",
   };
 
-  const model = createRoseModel();
-  const rose = new RoseSvg(model, state.color);
+  const { rose, spriteUrlFor } = createRose(state.color, opts.style);
 
   const swatches = ROSE_COLORS.map((color) =>
     h(
@@ -33,7 +32,7 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
         "aria-pressed": String(color === state.color),
         onClick: () => {
           state.color = color;
-          rose.setColor(color);
+          rose.setColor(color, spriteUrlFor(color));
           opts.onChange?.(state);
           preview.className = `editor__preview card--${color}`;
           for (const s of swatches) {

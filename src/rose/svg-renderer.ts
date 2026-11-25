@@ -37,6 +37,8 @@ export class RoseSvg {
   constructor(
     private readonly model: RoseModel,
     color: RoseColor,
+    /** Pixelmaße des Atlasbilds (nur für Sprite-Modelle nötig) */
+    private readonly atlasSize: { width: number; height: number } = { width: 0, height: 0 },
   ) {
     this.color = color;
     this.el = el("svg", {
@@ -56,10 +58,13 @@ export class RoseSvg {
     this.buildPetals();
   }
 
-  setColor(color: RoseColor) {
-    if (color === this.color) return;
+  setColor(color: RoseColor, spriteUrl?: string) {
+    if (color === this.color && !spriteUrl) return;
     this.color = color;
     this.buildDefs();
+    if (spriteUrl) {
+      for (const img of this.el.querySelectorAll<SVGImageElement>("image.petal__sprite")) img.setAttribute("href", spriteUrl);
+    }
   }
 
   /** Pose eines Blatts setzen; `pose` undefined = Ruhelage. */
@@ -144,7 +149,8 @@ export class RoseSvg {
     const sorted = [...this.model.petals].sort((a, b) => b.ring - a.ring);
     for (const petal of sorted) {
       const g = el("g", { class: "petal", "data-id": petal.id });
-      const shapeGroup = el("g", { transform: `translate(${-petal.shape.pivot.x} ${-petal.shape.pivot.y})` });
+      const rotation = petal.shape.kind === "sprite" ? petal.shape.rotation : 0;
+      const shapeGroup = el("g", { transform: `rotate(${rotation}) translate(${-petal.shape.pivot.x} ${-petal.shape.pivot.y})` });
 
       if (petal.shape.kind === "path") {
         const innerRing = petal.ring <= HEART_RING;
@@ -172,10 +178,14 @@ export class RoseSvg {
           );
         }
       } else {
-        // Sprite-Atlas (Schritt 2): Ausschnitt per <image> + clipPath.
+        // Sprite-Atlas: verschachteltes <svg> mit viewBox schneidet den Ausschnitt aus dem Atlasbild.
         const s = petal.shape;
-        const img = el("image", { href: s.url, x: -s.x, y: -s.y, width: s.width, height: s.height });
-        shapeGroup.appendChild(img);
+        const crop = el("svg", { x: 0, y: 0, width: s.width, height: s.height, viewBox: `${s.x} ${s.y} ${s.width} ${s.height}`, overflow: "hidden" });
+        const img = el("image", { href: s.url, x: 0, y: 0, class: "petal__sprite", preserveAspectRatio: "none" });
+        img.setAttribute("width", String(this.atlasSize.width));
+        img.setAttribute("height", String(this.atlasSize.height));
+        crop.appendChild(img);
+        shapeGroup.appendChild(crop);
       }
 
       g.appendChild(shapeGroup);

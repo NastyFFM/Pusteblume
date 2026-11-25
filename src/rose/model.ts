@@ -31,6 +31,8 @@ export type PetalShape =
       height: number;
       /** Pivot in Pixeln relativ zum Ausschnitt. */
       pivot: Point;
+      /** Drehung in Grad, damit die Spitze nach -y zeigt. */
+      rotation: number;
     };
 
 export interface Petal {

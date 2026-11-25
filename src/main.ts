@@ -3,6 +3,8 @@ import { h } from "./dom";
 import { decodeCard } from "../shared/link";
 import { mountCardView } from "./ui/card-view";
 import { mountEditorView } from "./ui/editor-view";
+import { loadAtlas } from "./rose/sprite-model";
+import type { RoseStyle } from "./rose/factory";
 
 const app = document.getElementById("app")!;
 const PREVIEW_KEY = "pusteblume:preview";
@@ -27,11 +29,35 @@ function writeJson(key: string, value: unknown) {
 
 let activeView: { destroy(): void } | null = null;
 
+/** Rosen-Darstellung aus der URL: ?rose=<atlasname> lädt einen Sprite-Atlas, sonst SVG. */
+let roseStyle: RoseStyle = { kind: "svg" };
+let roseStyleLoaded: Promise<void> | null = null;
+
+function ensureRoseStyle(): Promise<void> {
+  roseStyleLoaded ??= (async () => {
+    const name = new URLSearchParams(location.search).get("rose");
+    if (!name || !/^[a-z0-9-]+$/i.test(name)) return;
+    try {
+      const { atlas, baseUrl } = await loadAtlas(name);
+      roseStyle = { kind: "sprite", atlas, baseUrl };
+    } catch (e) {
+      console.warn("Sprite-Atlas konnte nicht geladen werden, nutze SVG-Rose.", e);
+    }
+  })();
+  return roseStyleLoaded;
+}
+
+/** Hängt den ?rose-Parameter an interne Navigationen an, damit die Darstellung erhalten bleibt. */
+function withStyle(path: string): string {
+  return path + location.search;
+}
+
 function showEditor() {
   activeView?.destroy();
   activeView = null;
   document.title = "Pusteblume · Interaktive Grußkarte";
   mountEditorView(app, {
+    style: roseStyle,
     // Entwurf wiederherstellen: nach Vorschau, Zurück-Navigation oder Neuladen.
     initial: readJson<Partial<CardData>>(DRAFT_KEY) ?? undefined,
     onChange(draft) {
@@ -39,8 +65,8 @@ function showEditor() {
     },
     onPreview(card) {
       writeJson(PREVIEW_KEY, card);
-      history.pushState({}, "", "/preview");
-      route();
+      history.pushState({}, "", withStyle("/preview"));
+      void route();
     },
   });
 }
@@ -49,10 +75,11 @@ function showCard(card: CardData, opts?: { preview?: boolean }) {
   activeView?.destroy();
   document.title = "Eine Rose für dich 🌹";
   activeView = mountCardView(app, card, {
+    style: roseStyle,
     onBack: opts?.preview
       ? () => {
-          history.pushState({}, "", "/");
-          route();
+          history.pushState({}, "", withStyle("/"));
+          void route();
         }
       : undefined,
     backLabel: "← Zurück zum Editor",
@@ -72,7 +99,8 @@ function showError(text: string) {
   );
 }
 
-function route() {
+async function route() {
+  await ensureRoseStyle();
   const path = location.pathname.replace(/\/+$/, "") || "/";
 
   if (path === "/") return showEditor();
@@ -94,5 +122,5 @@ function route() {
   showError("Diese Seite gibt es nicht.");
 }
 
-window.addEventListener("popstate", route);
-route();
+window.addEventListener("popstate", () => void route());
+void route();
