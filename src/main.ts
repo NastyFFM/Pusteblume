@@ -1,6 +1,7 @@
 import type { CardData } from "../shared/card";
 import { fetchCard } from "./api";
 import { h } from "./dom";
+import { decodeCard } from "../shared/link";
 import { mountCardView } from "./ui/card-view";
 import { mountEditorView } from "./ui/editor-view";
 
@@ -63,6 +64,14 @@ async function route() {
     const raw = sessionStorage.getItem(PREVIEW_KEY);
     if (!raw) return showEditor();
     return showCard(JSON.parse(raw) as CardData, { preview: true });
+  }
+
+  // Frontend-Link: Karte steckt vollständig in der URL.
+  const encoded = /^\/v\/([^/]+)$/.exec(path);
+  if (encoded) {
+    const card = decodeCard(encoded[1]!);
+    if (!card) return showError("Dieser Link ist unvollständig oder beschädigt.");
+    return showCard(card);
   }
 
   const match = /^\/c\/([^/]+)$/.exec(path);

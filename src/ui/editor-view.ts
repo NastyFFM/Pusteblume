@@ -1,5 +1,5 @@
 import { LIMITS, ROSE_COLORS, validateCard, type CardData, type RoseColor } from "../../shared/card";
-import { createCard } from "../api";
+import { createCardLink } from "../api";
 import { h } from "../dom";
 import { createRoseModel } from "../rose/model";
 import { RoseSvg } from "../rose/svg-renderer";
@@ -107,7 +107,7 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
         submitBtn.disabled = true;
         submitBtn.textContent = "Wird erstellt …";
         try {
-          const { url } = await createCard(card);
+          const url = await createCardLink(card);
           resultLink.textContent = url;
           resultLink.setAttribute("href", url);
           result.hidden = false;

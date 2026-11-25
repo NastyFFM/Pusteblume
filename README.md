@@ -8,7 +8,8 @@ Der Empfänger pustet ins Mikrofon des Handys, die Blütenblätter fliegen davon
 
 - **Editor** (`/`): Rosenfarbe (rot, weiß, gelb), Botschaft, Absender, Vorschau, Kurzlink erzeugen, kopieren oder teilen.
 - **Karte** (`/c/:id`): Rose über der Botschaft, Pust-Erkennung per Web Audio API, Fallback per Wischen (ohne Mikrofon) und Leertaste (Desktop).
-- **Kurzlinks**: `POST /api/cards` legt eine Karte ab und liefert `https://<host>/c/<id>`, `GET /api/cards/:id` liest sie.
+- **Links**: Standardmäßig steckt die Karte komplett im Link (`/v/<kodierte Karte>`), es wird kein Backend gebraucht.
+  Kurzlinks über `POST /api/cards` (`/c/<id>`) lassen sich mit der Build-Variable `VITE_SHORT_LINKS=true` einschalten.
 - **Rose**: aktuell prozedurales SVG (Blütenblatt-Pfade in Ringen, Herzscheibe, Blätter in eigener Ebene hinter der Botschaft).
 
 ## Entwicklung
@@ -26,6 +27,9 @@ im lokalen Netz daher einen Tunnel (z. B. `vercel dev` + `ngrok`) oder direkt ei
 
 ## Deployment (Vercel)
 
+Ohne weitere Einstellungen läuft die App rein statisch mit Frontend-Links. Für Kurzlinks:
+
+0. `VITE_SHORT_LINKS=true` als Environment-Variable setzen. `/api/health` zeigt, ob Functions laufen und Redis erkannt wird.
 1. Projekt mit Vercel verbinden (Framework: Vite, `vercel.json` liegt bei).
 2. Im Vercel Marketplace **Upstash for Redis** zum Projekt hinzufügen. Das setzt `KV_REST_API_URL` und `KV_REST_API_TOKEN`
    automatisch (alternativ `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Karten werden mit einem Jahr TTL gespeichert (Ablauf nach einem Jahr).

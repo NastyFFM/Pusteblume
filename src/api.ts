@@ -1,4 +1,14 @@
 import type { CardData, StoredCard } from "../shared/card";
+import { encodeCard } from "../shared/link";
+
+/** Kurzlinks über die API nur, wenn ausdrücklich aktiviert (VITE_SHORT_LINKS=true). Sonst reiner Frontend-Link. */
+export const SHORT_LINKS_ENABLED = import.meta.env.VITE_SHORT_LINKS === "true";
+
+/** Erzeugt den Link zu einer Karte: Kurzlink per API oder vollständig kodierter Frontend-Link. */
+export async function createCardLink(card: CardData): Promise<string> {
+  if (SHORT_LINKS_ENABLED) return (await createCard(card)).url;
+  return `${location.origin}/v/${encodeCard(card)}`;
+}
 
 async function parse<T>(res: Response): Promise<T> {
   const text = await res.text();
