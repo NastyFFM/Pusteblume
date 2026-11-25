@@ -28,7 +28,7 @@ im lokalen Netz daher einen Tunnel (z. B. `vercel dev` + `ngrok`) oder direkt ei
 
 1. Projekt mit Vercel verbinden (Framework: Vite, `vercel.json` liegt bei).
 2. Im Vercel Marketplace **Upstash for Redis** zum Projekt hinzufügen. Das setzt `KV_REST_API_URL` und `KV_REST_API_TOKEN`
-   automatisch (alternativ `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Karten werden mit einem Jahr TTL gespeichert.
+   automatisch (alternativ `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Karten werden mit einem Jahr TTL gespeichert (Ablauf nach einem Jahr).
 3. Optional `PUBLIC_BASE_URL` setzen, wenn Kurzlinks auf eine eigene Domain zeigen sollen.
 
 Ohne Redis-Variablen antwortet die API auf Vercel mit einem Hinweis-Fehler; lokal wird `.data/cards.json` benutzt.
