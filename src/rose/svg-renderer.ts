@@ -1,0 +1,187 @@
+import type { RoseColor } from "../../shared/card";
+import { HEART_RING, PALETTES, type Petal, type RoseModel } from "./model";
+
+export interface PetalPose {
+  /** Verschiebung des Pivots gegenüber der Ruhelage */
+  dx: number;
+  dy: number;
+  /** zusätzliche Drehung in Grad */
+  rot: number;
+  scale: number;
+  alpha: number;
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const VIEW = 150;
+
+function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+  return node;
+}
+
+/**
+ * Zeichnet das Rosenmodell als SVG. Jedes Blatt ist eine eigene Gruppe, deren
+ * Transform pro Frame von der Physik gesetzt wird.
+ */
+export class RoseSvg {
+  /** Blüte (liegt über der Botschaft) */
+  readonly el: SVGSVGElement;
+  /** Blätter (liegen hinter der Botschaft) */
+  readonly backEl: SVGSVGElement;
+  private readonly petalGroups = new Map<number, SVGGElement>();
+  private readonly defs: SVGDefsElement;
+  private readonly petalLayer: SVGGElement;
+  private color: RoseColor;
+
+  constructor(
+    private readonly model: RoseModel,
+    color: RoseColor,
+  ) {
+    this.color = color;
+    this.el = el("svg", {
+      viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`,
+      class: "rose",
+      role: "img",
+      "aria-label": "Eine Rose",
+    });
+    this.defs = el("defs");
+    this.el.appendChild(this.defs);
+    this.buildDefs();
+
+    this.backEl = el("svg", { viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`, class: "rose rose--back", "aria-hidden": "true" });
+    this.backEl.appendChild(this.buildLeaves());
+    this.petalLayer = el("g", { class: "rose__petals" });
+    this.el.appendChild(this.petalLayer);
+    this.buildPetals();
+  }
+
+  setColor(color: RoseColor) {
+    if (color === this.color) return;
+    this.color = color;
+    this.buildDefs();
+  }
+
+  /** Pose eines Blatts setzen; `pose` undefined = Ruhelage. */
+  setPose(petal: Petal, pose?: PetalPose) {
+    const g = this.petalGroups.get(petal.id);
+    if (!g) return;
+    const base = `rotate(${petal.angle}) translate(0 ${-petal.radius}) rotate(${petal.tilt}) scale(${petal.size})`;
+    if (!pose) {
+      g.setAttribute("transform", base);
+      g.style.opacity = "";
+      g.style.display = "";
+      return;
+    }
+    if (pose.alpha <= 0) {
+      g.style.display = "none";
+      return;
+    }
+    g.style.display = "";
+    g.style.opacity = pose.alpha.toFixed(3);
+    g.setAttribute(
+      "transform",
+      `translate(${pose.dx.toFixed(2)} ${pose.dy.toFixed(2)}) rotate(${petal.angle}) translate(0 ${-petal.radius}) rotate(${(petal.tilt + pose.rot).toFixed(2)}) scale(${(petal.size * pose.scale).toFixed(3)})`,
+    );
+  }
+
+  /** Leichtes Zittern eines sitzenden Blatts (Feedback beim sanften Pusten). */
+  setTremble(petal: Petal, degrees: number) {
+    const g = this.petalGroups.get(petal.id);
+    if (!g) return;
+    g.setAttribute(
+      "transform",
+      `rotate(${petal.angle}) translate(0 ${-petal.radius}) rotate(${(petal.tilt + degrees).toFixed(2)}) scale(${petal.size})`,
+    );
+  }
+
+  private buildDefs() {
+    const pal = PALETTES[this.color];
+    this.defs.replaceChildren();
+
+    // Blattverlauf: dunkel am Ansatz (unten im lokalen System), hell zur Spitze.
+    const outer = el("linearGradient", { id: "petal-outer", x1: 0, y1: 1, x2: 0, y2: 0 });
+    outer.append(
+      el("stop", { offset: 0, "stop-color": pal.deep }),
+      el("stop", { offset: 0.35, "stop-color": pal.base }),
+      el("stop", { offset: 0.75, "stop-color": pal.mid }),
+      el("stop", { offset: 1, "stop-color": pal.tip }),
+    );
+    const inner = el("linearGradient", { id: "petal-inner", x1: 0, y1: 1, x2: 0, y2: 0 });
+    inner.append(
+      el("stop", { offset: 0, "stop-color": pal.heart }),
+      el("stop", { offset: 0.5, "stop-color": pal.deep }),
+      el("stop", { offset: 1, "stop-color": pal.base }),
+    );
+    const leaf = el("linearGradient", { id: "leaf-grad", x1: 0, y1: 1, x2: 0, y2: 0 });
+    leaf.append(el("stop", { offset: 0, "stop-color": "#1d4a24" }), el("stop", { offset: 1, "stop-color": "#4f8a3e" }));
+
+    const shadow = el("filter", { id: "petal-shadow", x: "-30%", y: "-30%", width: "160%", height: "160%" });
+    shadow.append(el("feDropShadow", { dx: 0, dy: 1.2, stdDeviation: 1.4, "flood-color": pal.heart, "flood-opacity": 0.45 }));
+
+    this.defs.append(outer, inner, leaf, shadow);
+    this.el.style.setProperty("--rim", pal.rim);
+    this.el.style.setProperty("--deep", pal.deep);
+  }
+
+  private buildLeaves(): SVGGElement {
+    const layer = el("g", { class: "rose__leaves" });
+    for (const leaf of this.model.leaves) {
+      const g = el("g", {
+        transform: `rotate(${leaf.angle}) translate(0 ${-leaf.radius}) rotate(${leaf.tilt}) scale(${leaf.size})`,
+      });
+      g.append(
+        el("path", { d: leaf.d, fill: "#2f6b2f", stroke: "#163a1c", "stroke-width": 1.2, "stroke-linejoin": "round" }),
+        el("path", { d: leaf.vein, stroke: "#9cc77f", "stroke-width": 1, "stroke-opacity": 0.6, fill: "none" }),
+      );
+      layer.appendChild(g);
+    }
+    return layer;
+  }
+
+  private buildPetals() {
+    // Äußere Ringe zuerst zeichnen, damit innere oben liegen.
+    const sorted = [...this.model.petals].sort((a, b) => b.ring - a.ring);
+    for (const petal of sorted) {
+      const g = el("g", { class: "petal", "data-id": petal.id });
+      const shapeGroup = el("g", { transform: `translate(${-petal.shape.pivot.x} ${-petal.shape.pivot.y})` });
+
+      if (petal.shape.kind === "path") {
+        const innerRing = petal.ring <= HEART_RING;
+        shapeGroup.appendChild(
+          el("path", {
+            d: petal.shape.d,
+            fill: innerRing ? "url(#petal-inner)" : "url(#petal-outer)",
+            stroke: "var(--deep)",
+            "stroke-opacity": 0.35,
+            "stroke-width": 0.8,
+            "stroke-linejoin": "round",
+            filter: "url(#petal-shadow)",
+          }),
+        );
+        if (petal.shape.rim && petal.ring > HEART_RING) {
+          shapeGroup.appendChild(
+            el("path", {
+              d: petal.shape.rim,
+              fill: "none",
+              stroke: "var(--rim)",
+              "stroke-opacity": 0.55,
+              "stroke-width": 1.6,
+              "stroke-linecap": "round",
+            }),
+          );
+        }
+      } else {
+        // Sprite-Atlas (Schritt 2): Ausschnitt per <image> + clipPath.
+        const s = petal.shape;
+        const img = el("image", { href: s.url, x: -s.x, y: -s.y, width: s.width, height: s.height });
+        shapeGroup.appendChild(img);
+      }
+
+      g.appendChild(shapeGroup);
+      this.petalLayer.appendChild(g);
+      this.petalGroups.set(petal.id, g);
+      this.setPose(petal);
+    }
+  }
+}
