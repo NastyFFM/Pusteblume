@@ -4,6 +4,7 @@ import { h } from "../dom";
 import { RosePhysics } from "../rose/physics";
 import { createRose, type RoseStyle } from "../rose/factory";
 import { TiltCamera } from "../view/tilt";
+import { Ambience, glowMessage } from "../view/ambience";
 
 export interface CardViewOptions {
   /** Zurück-Aktion (z. B. im Vorschau-Modus) */
@@ -36,7 +37,9 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     card.from ? h("p", { class: "card__from" }, `– ${card.from}`) : null,
   );
 
-  const stage = h("div", { class: "card__stage" }, rose.backEl, message, rose.el);
+  // Atmosphäre: Schatten hinter dem Stiel, Pollen und Lichtpunkte über der Blüte
+  const ambience = new Ambience(model);
+  const stage = h("div", { class: "card__stage" }, ambience.shadowEl, rose.backEl, message, rose.el, ambience.motesEl, ambience.glowsEl);
   // Botschaft an die tatsächliche Blütengröße anpassen (kleine Knospe = kleinere Scheibe)
   stage.style.setProperty("--rose-scale", (model.radius / 150).toFixed(3));
   const meter = h("div", { class: "meter" }, h("div", { class: "meter__fill" }));
@@ -72,11 +75,13 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
   let raf = 0;
 
   const physics = new RosePhysics(model, {
-    onRelease: (_petal, blow) => {
+    onRelease: (petal, blow) => {
+      ambience.release(petal, rose.getCamera(), blow);
       if (blow > 0.75 && "vibrate" in navigator) navigator.vibrate?.(8);
     },
     onReveal: () => {
       view.classList.add("card--revealed");
+      glowMessage(message);
       hint.textContent = "";
       done.hidden = false;
       if (mode === "mic") mic.stop();
@@ -84,6 +89,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
   });
 
   const meterFill = meter.firstElementChild as HTMLElement;
+  ambience.update(rose.getCamera(), 0);
 
   function frame(now: number) {
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -107,6 +113,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
       else rose.setPose(petal);
     });
     rose.setProgress(physics.progress);
+    ambience.update(rose.getCamera(), physics.progress);
     raf = requestAnimationFrame(frame);
   }
 
@@ -151,6 +158,8 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     physics.reset();
     for (const p of model.petals) rose.setPose(p);
     rose.setProgress(0);
+    ambience.reset();
+    ambience.update(rose.getCamera(), 0);
     view.classList.remove("card--revealed");
     done.hidden = true;
     if (mode === "mic") {
@@ -187,6 +196,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     setView: (elevation: number, azimuth: number) => {
       tilt.set({ elevation, azimuth });
       rose.setCamera({ elevation, azimuth });
+      ambience.update(rose.getCamera(), physics.progress);
     },
   };
 
