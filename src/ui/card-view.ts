@@ -147,6 +147,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
   startGesture.addEventListener("click", () => begin("gesture"));
 
   again.addEventListener("click", async () => {
+    tilt.recalibrate();
     physics.reset();
     for (const p of model.petals) rose.setPose(p);
     rose.setProgress(0);

@@ -89,8 +89,10 @@ mit Pivot am Blütenboden, Neigung je Ring (innen fast senkrecht, außen aufgekl
 Eine orthografische Kamera mit Höhenwinkel und Azimut projiziert sie auf eine SVG-`matrix()`; die Blätter
 werden pro Frame nach Tiefe sortiert. Standard ist eine Dreiviertel-Ansicht (48°).
 
-Die Kamera folgt der Handy-Neigung (`src/view/tilt.ts`, DeviceOrientation, auf iOS mit Erlaubnis-Abfrage
-beim Start): flach gehalten Blick von oben, aufrecht von der Seite, seitliches Kippen dreht die Rose.
+Die Kamera folgt der Handy-Lage (`src/view/tilt.ts`, DeviceOrientation, auf iOS mit Erlaubnis-Abfrage
+beim Start): flach gehalten Blick von oben, aufrecht von der Seite. Dreht man das Handy um die Hochachse
+(Kompasswinkel), dreht sich die Rose entgegen, als stünde sie fest im Raum, volle 360°; Ausgangsrichtung ist
+die Lage beim Start bzw. bei "Noch einmal". Seitliches Kippen lehnt die Ansicht leicht.
 Am Desktop steuert die Maus über der Bühne. `window.__pusteblume.setView(höhe, azimut)` setzt sie direkt.
 Die SVG-Rose bleibt eine reine Draufsicht.
 
