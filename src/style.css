@@ -132,7 +132,7 @@ img { display: block; }
 .quote__body {
   position: absolute; left: var(--pad); right: var(--pad); top: 22%; text-align: center; display: grid; gap: 14px; justify-items: center;
 }
-.quote__text { font-family: var(--font-quote); font-weight: 400; font-size: clamp(26px, 8.2vw, 32px); line-height: 1.3; color: var(--ink); max-width: 300px; text-wrap: balance; }
+.quote__text { font-family: var(--font-quote); font-weight: 400; font-size: clamp(26px, 8.2cqw, 32px); line-height: 1.3; color: var(--ink); max-width: 300px; text-wrap: balance; }
 .quote__author { font-size: 14px; font-weight: 500; color: var(--brand); line-height: 1.6; }
 
 /* Nachricht-Schritt: Karte liegt als Hintergrund, der Inhalt unten bekommt einen weichen Übergang */
@@ -209,7 +209,11 @@ html[data-fx~="off"] .panel { -webkit-backdrop-filter: none; backdrop-filter: no
   .panel, .panel.is-leaving { animation: none; }
 }
 
-/* Breite Bildschirme: Rahmen wie ein Handy mittig, Rest bleibt rosa. */
-@media (min-width: 540px) {
-  .screen { min-height: 100dvh; box-shadow: 0 0 0 1px rgba(141, 29, 50, 0.08); }
+/* Desktop (Maus): Rahmen wie ein Handy mittig, Rest bleibt rosa. */
+@media (min-width: 540px) and (pointer: fine) {
+  .screen { box-shadow: 0 0 0 1px rgba(141, 29, 50, 0.08); }
+}
+/* Touch-Geräte füllen immer die volle Breite, auch im „Desktop-Website“-Modus des Browsers. */
+@media (pointer: coarse) {
+  .screen { max-width: none; }
 }
