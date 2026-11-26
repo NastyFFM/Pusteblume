@@ -3,7 +3,23 @@ import type { PetalPose } from "./svg-renderer";
 
 type PetalState =
   | { kind: "attached" }
-  | { kind: "flying"; x: number; y: number; vx: number; vy: number; rot: number; vrot: number; scale: number; alpha: number; t: number }
+  | {
+      kind: "flying";
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      /** Drehung in der Bildebene (rad) */
+      rot: number;
+      vrot: number;
+      /** Trudeln: Drehung um die Längsachse des Blatts in Grad; läuft frei weiter (Renderer nutzt cos). */
+      flip: number;
+      /** Winkelgeschwindigkeit des Trudelns in Grad/s, klingt durch Luftwiderstand ab */
+      vflip: number;
+      scale: number;
+      alpha: number;
+      t: number;
+    }
   | { kind: "gone" };
 
 export interface PhysicsEvents {
@@ -15,6 +31,25 @@ export interface PhysicsEvents {
 
 /** Wie viele Sekunden volles Pusten nötig sind, bis die letzte Blüte fällt. */
 const FULL_BLOW_SECONDS = 2.4;
+
+/** Ab dieser Intensität gilt das Pusten als kräftig: Blätter starten schneller und drehen wilder. */
+const WILD_BLOW = 0.7;
+
+/** Trudel-Geschwindigkeit beim Lösen in Grad/s (bei Intensität 0 bzw. 1). */
+const FLIP_SPEED_MIN = 90;
+const FLIP_SPEED_MAX = 420;
+
+/** Flattern: kleine Sinus-Modulation des Trudelwinkels (Amplitude in Grad, Frequenz in rad/s). */
+const FLUTTER_AMP = 10;
+const FLUTTER_FREQ = 9;
+
+/**
+ * 0 bei sanftem Pusten, 1 bei voller Intensität oberhalb von WILD_BLOW.
+ * Bis WILD_BLOW bleibt das Verhalten wie bisher, darüber wird es spürbar wilder.
+ */
+function wildness(blow: number): number {
+  return Math.max(0, Math.min(1, (blow - WILD_BLOW) / (1 - WILD_BLOW)));
+}
 
 /**
  * Pust-Physik. Pro Frame wird die aktuelle Pust-Intensität (0..1) übergeben.
@@ -41,6 +76,7 @@ export class RosePhysics {
     this.energy = 0;
     this.revealed = false;
     this.time = 0;
+    this.states.clear();
     for (const p of this.model.petals) this.states.set(p.id, { kind: "attached" });
   }
 
@@ -57,9 +93,10 @@ export class RosePhysics {
 
   /** Einen Frame rechnen. Gibt für jedes Blatt die Pose zurück (undefined = Ruhelage). */
   step(dt: number, intensity: number, apply: (petal: Petal, pose: PetalPose | undefined, tremble: number) => void) {
-    dt = Math.min(dt, 0.05);
+    // Ungültige Eingaben (NaN, negative Zeit) dürfen den Zustand nicht verseuchen.
+    dt = Number.isFinite(dt) ? Math.max(0, Math.min(dt, 0.05)) : 0;
     this.time += dt;
-    const blow = Math.max(0, Math.min(1, intensity));
+    const blow = Number.isFinite(intensity) ? Math.max(0, Math.min(1, intensity)) : 0;
 
     // Energie sammeln (leicht überlinear, damit kräftiges Pusten spürbar mehr bringt).
     if (blow > 0.04) this.energy += Math.pow(blow, 1.35) * (dt / FULL_BLOW_SECONDS);
@@ -105,6 +142,9 @@ export class RosePhysics {
       s.y += s.vy * dt;
       s.rot += s.vrot * dt;
       s.vrot *= Math.exp(-0.4 * dt);
+      // Trudeln um die Längsachse: Winkel läuft frei weiter, Tempo klingt langsam ab.
+      s.flip += s.vflip * dt;
+      s.vflip *= Math.exp(-0.5 * dt);
       s.scale = Math.min(1.7, s.scale + 0.5 * dt); // kommt dem Betrachter entgegen
       s.t += dt;
 
@@ -116,7 +156,22 @@ export class RosePhysics {
         apply(petal, { dx: 0, dy: 0, rot: 0, scale: 1, alpha: 0 }, 0);
         continue;
       }
-      apply(petal, { dx: s.x, dy: s.y, rot: (s.rot * 180) / Math.PI, scale: s.scale, alpha: s.alpha, vx: s.vx, vy: s.vy, flip: 0 }, 0);
+      // Leichtes Flattern: kleine Sinus-Modulation über die Flugzeit, je Blatt phasenverschoben.
+      const flutter = FLUTTER_AMP * Math.sin(s.t * FLUTTER_FREQ + petal.id * 0.9);
+      apply(
+        petal,
+        {
+          dx: s.x,
+          dy: s.y,
+          rot: (s.rot * 180) / Math.PI,
+          scale: s.scale,
+          alpha: s.alpha,
+          vx: s.vx,
+          vy: s.vy,
+          flip: s.flip + flutter,
+        },
+        0,
+      );
     }
 
     if (attachedCount === 0 && !this.revealed) {
@@ -134,7 +189,18 @@ export class RosePhysics {
     const len = Math.hypot(dx, dy) || 1;
     dx /= len;
     dy /= len;
-    const speed = 160 + 420 * blow + Math.random() * 60;
+
+    // Kräftiges Pusten (über WILD_BLOW): bis zu 30 % schneller und doppelt so viel Drehung.
+    const wild = wildness(blow);
+    const speed = (160 + 420 * blow + Math.random() * 60) * (1 + 0.3 * wild);
+    const vrot = (Math.random() - 0.5) * (4 + 8 * blow) * (1 + 1.0 * wild);
+
+    // Trudeln: Tempo nach Pust-Intensität mit etwas Streuung, zufälliges Vorzeichen,
+    // deterministisch auf FLIP_SPEED_MIN..FLIP_SPEED_MAX begrenzt.
+    const flipBase = FLIP_SPEED_MIN + (FLIP_SPEED_MAX - FLIP_SPEED_MIN) * blow + (Math.random() - 0.5) * 60;
+    const flipSpeed = Math.max(FLIP_SPEED_MIN, Math.min(FLIP_SPEED_MAX, flipBase));
+    const vflip = (Math.random() < 0.5 ? -1 : 1) * flipSpeed;
+
     this.states.set(petal.id, {
       kind: "flying",
       x: 0,
@@ -142,7 +208,9 @@ export class RosePhysics {
       vx: dx * speed,
       vy: dy * speed,
       rot: 0,
-      vrot: (Math.random() - 0.5) * (4 + 8 * blow),
+      vrot,
+      flip: 0,
+      vflip,
       scale: 1,
       alpha: 1,
       t: 0,
