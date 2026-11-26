@@ -94,8 +94,26 @@ p { margin: 0; }
 .result__title { font-size: 1.5rem; }
 .result__link { display: block; word-break: break-all; font-weight: 700; color: var(--accent); background: #fff; padding: 0.7rem 0.9rem; border-radius: 12px; border: 1px dashed var(--line); }
 
+/* --- Umgebung (Panorama hinter der Bühne) ---------------------------------- */
+.environment {
+  position: absolute; inset: 0; overflow: hidden; z-index: -1; pointer-events: none;
+}
+.environment__strip {
+  position: absolute; left: 0; top: 0;
+  height: 150vh; width: 900vh; /* drei Kacheln à 300vh (Bild ist 2:1) */
+  background-repeat: repeat-x; background-size: auto 100%;
+  will-change: transform;
+}
+/* leichter warmer Schleier, damit Text und Bedienelemente lesbar bleiben */
+.environment::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(250, 244, 236, 0.18), rgba(247, 240, 230, 0.32));
+}
+html[data-fx~="off"] .environment { display: none !important; }
+
 /* --- Karte ------------------------------------------------------------- */
 .card {
+  isolation: isolate;
   flex: 1; display: grid; grid-template-rows: auto 1fr auto auto auto; align-items: center; justify-items: center;
   gap: 0.75rem; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom)); position: relative; min-height: 100dvh;
   touch-action: none;

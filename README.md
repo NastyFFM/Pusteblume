@@ -105,7 +105,12 @@ Die SVG-Rose bleibt eine reine Draufsicht.
   `src/rose/projection.ts`, `src/rose/physics.ts`).
 - Bühne (`src/view/ambience.ts`, `src/style.css`): Bodenschatten folgt der Kamera, Vignette, Atmen statt
   Pendeln, schwebende Pollen, Lichtpunkt beim Lösen eines Blatts, Aufglühen der Botschaft.
-- `?fx=lite` schaltet alle SVG-Filter ab (Tiefenschärfe, Bewegungsunschärfe), falls ein Gerät ruckelt.
+- Umgebung (`src/view/environment.ts`): ein equirektangulares Panorama (`public/env/room.jpg`, vorab
+  weichgezeichnet) liegt als umlaufender Streifen hinter der Bühne und wird nach Kamerawinkel verschoben,
+  Azimut horizontal umlaufend, Höhenwinkel vertikal. Neues Panorama aufbereiten:
+  `node tools/make-env.cjs <panorama.png> public/env/room.jpg 1536 14` (Breite, Blur-Radius).
+- `?fx=lite` schaltet alle SVG-Filter ab (Tiefenschärfe, Bewegungsunschärfe), `?fx=lite,noshade` zusätzlich
+  die Schattierungskopien, `?fx=off` alle neuen Effekte inklusive Umgebung, falls ein Gerät ruckelt.
 
 ## Debug-Haken
 

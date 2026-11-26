@@ -4,6 +4,7 @@ import { h } from "../dom";
 import { RosePhysics } from "../rose/physics";
 import { createRose, type RoseStyle } from "../rose/factory";
 import { TiltCamera } from "../view/tilt";
+import { Environment } from "../view/environment";
 import { Ambience, glowMessage } from "../view/ambience";
 
 export interface CardViewOptions {
@@ -27,6 +28,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
   const { model, rose } = createRose(card.color, opts.style, card.shape ?? DEFAULT_SHAPE);
   const threeD = model.defaultElevation < 90;
   const tilt = new TiltCamera(rose.getCamera());
+  const environment = new Environment("/env/room.jpg", rose.getCamera().elevation);
   const mic = new BlowDetector();
   const gesture = new GestureBlow();
 
@@ -66,7 +68,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
 
   const back = opts.onBack ? h("button", { class: "btn btn--link card__back", onClick: () => opts.onBack?.() }, opts.backLabel ?? "Zurück") : null;
 
-  const view = h("section", { class: `card card--${card.color}${threeD ? " card--3d" : ""}` }, back, stage, hint, meter, done, intro);
+  const view = h("section", { class: `card card--${card.color}${threeD ? " card--3d" : ""}` }, environment.el, back, stage, hint, meter, done, intro);
   root.replaceChildren(view);
 
   // --- Interaktion -----------------------------------------------------------
@@ -106,6 +108,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     stage.style.setProperty("--blow", intensity.toFixed(3));
 
     if (threeD && tilt.update(dt)) rose.setCamera(tilt.camera);
+    environment.update(rose.getCamera());
 
     physics.step(dt, intensity, (petal, pose, tremble) => {
       if (pose) rose.setPose(petal, pose);
