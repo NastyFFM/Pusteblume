@@ -4,6 +4,7 @@ import { decodeCard } from "../shared/link";
 import { mountCardView } from "./ui/card-view";
 import { mountEditorView } from "./ui/editor-view";
 import { loadAtlas } from "./rose/sprite-model";
+import { FX } from "./rose/svg-renderer";
 import type { RoseStyle } from "./rose/factory";
 
 const app = document.getElementById("app")!;
@@ -28,6 +29,9 @@ function writeJson(key: string, value: unknown) {
 }
 
 let activeView: { destroy(): void } | null = null;
+
+// ?fx=lite: ohne SVG-Filter (für schwache Geräte oder zum Vergleich)
+FX.lite = new URLSearchParams(location.search).get("fx") === "lite";
 
 /** Standard-Atlas; ?rose=<name> wählt einen anderen, ?rose=svg die gezeichnete Rose. */
 const DEFAULT_ROSE = "rose2";

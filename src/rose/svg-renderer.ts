@@ -38,6 +38,12 @@ const NEAR_BLUR_SCALE = 1.3;
  */
 const MAX_MOTION_BLUR = 8;
 
+/**
+ * Effekt-Schalter. `lite` schaltet alle SVG-Filter (Tiefenschärfe, Bewegungsunschärfe) ab,
+ * Beleuchtung und Schattierung bleiben. Wird von main.ts über ?fx=lite gesetzt.
+ */
+export const FX = { lite: false };
+
 /** Tiefenschärfe-Stufe eines sitzenden Blatts: hinten leicht unscharf, Mitte normal, vorn scharf */
 type DepthTier = "far" | "mid" | "near";
 /** Filter je Stufe: nur die hinterste bekommt einen Blur (Filter kosten pro Element). */
@@ -219,7 +225,7 @@ export class RoseSvg {
         node.tier = tier;
         node.shade = -1; // Helligkeit beim nächsten Frame neu setzen
       }
-      this.applyFilter(node, TIER_FILTER[tier]);
+      this.applyFilter(node, FX.lite ? "" : TIER_FILTER[tier]);
     });
     // Nur die Ausreißer umhängen, von hinten nach vorn: ihr Nachfolger in der Zielreihenfolge
     // steht dann schon richtig (unverändertes Blatt oder bereits eingefügter Ausreißer).
@@ -246,39 +252,52 @@ export class RoseSvg {
   }
 
   /**
-   * Neue Reihenfolge aus der bestehenden ableiten: Blätter, die innerhalb der Toleranz
-   * tiefenrichtig stehen, bleiben, wo sie sind; nur die Ausreißer werden an ihre
-   * Tiefenposition einsortiert. So wandern pro Frame nur wenige Knoten im DOM.
+   * Neue Reihenfolge und die Blätter, die dafür im DOM bewegt werden müssen. Ausgangspunkt
+   * ist die aktuelle Reihenfolge: Die längste Teilfolge, die (in Tiefenstufen von SORT_EPSILON)
+   * schon aufsteigend ist, bleibt stehen; nur die übrigen Blätter werden an ihrer Tiefe
+   * einsortiert. Kleine Vertauschungen innerhalb der Toleranz lösen so keine Umhängung aus.
+   * Beim ersten Aufruf (noch keine Reihenfolge) wird voll sortiert, bei gleicher Tiefe äußere Ringe zuerst.
    */
   private nextOrder(): { order: Petal[]; moved: Petal[] } {
-    const byId = new Map(this.model.petals.map((p) => [p.id, p]));
     const depth = (p: Petal) => this.depths.get(p.id) ?? 0;
-    const kept: Petal[] = [];
-    const moved: Petal[] = [];
-    let max = -Infinity;
-    const current = this.order.length === this.petalNodes.size ? this.order : this.model.petals.map((p) => p.id);
-    for (const id of current) {
-      const p = byId.get(id);
-      if (!p) continue;
-      const d = depth(p);
-      if (d < max - SORT_EPSILON) moved.push(p);
-      else {
-        kept.push(p);
-        if (d > max) max = d;
-      }
+    if (this.order.length !== this.petalNodes.size) {
+      const order = [...this.model.petals].sort((a, b) => depth(a) - depth(b) || b.ring - a.ring);
+      return { order, moved: order };
     }
-    for (const p of moved) {
-      // erste Position, deren Tiefe größer ist (binäre Suche)
-      const d = depth(p);
-      let lo = 0, hi = kept.length;
+    const byId = new Map(this.model.petals.map((p) => [p.id, p]));
+    const current = this.order.map((id) => byId.get(id)!);
+    const bucket = current.map((p) => Math.round(depth(p) / SORT_EPSILON));
+    // Längste nicht fallende Teilfolge der Tiefenstufen (O(n log n)), prev für die Rückverfolgung
+    const tails: number[] = [], tailIdx: number[] = [], prev = new Array<number>(current.length).fill(-1);
+    for (let i = 0; i < current.length; i++) {
+      const v = bucket[i]!;
+      let lo = 0, hi = tails.length;
       while (lo < hi) {
         const mid = (lo + hi) >> 1;
-        if (depth(kept[mid]!) <= d) lo = mid + 1;
+        if (tails[mid]! <= v) lo = mid + 1;
         else hi = mid;
       }
-      kept.splice(lo, 0, p);
+      tails[lo] = v;
+      tailIdx[lo] = i;
+      prev[i] = lo > 0 ? tailIdx[lo - 1]! : -1;
     }
-    return { order: kept, moved };
+    const keep = new Set<number>();
+    for (let i = tails.length ? tailIdx[tails.length - 1]! : -1; i >= 0; i = prev[i]!) keep.add(i);
+    const order: Petal[] = [];
+    const moved: Petal[] = [];
+    current.forEach((p, i) => (keep.has(i) ? order.push(p) : moved.push(p)));
+    for (const p of moved) {
+      // hinter das letzte Blatt gleicher oder geringerer Tiefenstufe
+      const b = Math.round(depth(p) / SORT_EPSILON);
+      let lo = 0, hi = order.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (Math.round(depth(order[mid]!) / SORT_EPSILON) <= b) lo = mid + 1;
+        else hi = mid;
+      }
+      order.splice(lo, 0, p);
+    }
+    return { order, moved };
   }
 
   /**
@@ -288,7 +307,7 @@ export class RoseSvg {
   private applyFilter(node: PetalNode, filter: string, budget = false) {
     const id = Number(node.g.dataset.id);
     if (budget && filter && !this.motionBlurred.has(id)) {
-      if (this.motionBlurred.size >= MAX_MOTION_BLUR) filter = "";
+      if (FX.lite || this.motionBlurred.size >= MAX_MOTION_BLUR) filter = "";
       else this.motionBlurred.add(id);
     }
     if (!budget || !filter) this.motionBlurred.delete(id);

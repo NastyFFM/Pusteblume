@@ -97,6 +97,16 @@ die Lage beim Start bzw. bei "Noch einmal". Seitliches Kippen lehnt die Ansicht 
 Am Desktop steuert die Maus über der Bühne. `window.__pusteblume.setView(höhe, azimut)` setzt sie direkt.
 Die SVG-Rose bleibt eine reine Draufsicht.
 
+## Effekte
+
+- Licht und Schatten pro Blatt aus der Flächennormale (Deckkopie mit Multiply/Screen, kein Filter),
+  Tiefenschärfe in drei Stufen (nur die hinterste mit Blur), innere Verschattung, Bewegungsunschärfe
+  fliegender Blätter (vordefinierte Filter, Budget 8), Trudeln um die Längsachse (`src/rose/svg-renderer.ts`,
+  `src/rose/projection.ts`, `src/rose/physics.ts`).
+- Bühne (`src/view/ambience.ts`, `src/style.css`): Bodenschatten folgt der Kamera, Vignette, Atmen statt
+  Pendeln, schwebende Pollen, Lichtpunkt beim Lösen eines Blatts, Aufglühen der Botschaft.
+- `?fx=lite` schaltet alle SVG-Filter ab (Tiefenschärfe, Bewegungsunschärfe), falls ein Gerät ruckelt.
+
 ## Debug-Haken
 
 In der Kartenansicht steht `window.__pusteblume` bereit: `blow(0..1)` löst einen Windstoß aus,
