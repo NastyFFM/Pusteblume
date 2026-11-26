@@ -166,7 +166,7 @@ export const HEART_RING = 1.5;
 /**
  * Blütenform auf die Ringe anwenden.
  * - petals: Blattzahl proportional auf die Ringe verteilt (innen mindestens 3)
- * - openness: Radius und (3D) Neigung; 0 = eng stehende Knospe, 1 = weit aufgeklappt
+ * - openness: Radius und (3D) Neigung; 0 = fest geschlossene Knospe (Blätter lehnen nach innen), 1 = offen
  * - spread: Radius-Skalierung
  * - twist: Stärke der spiraligen Drehung
  */
@@ -193,8 +193,9 @@ export function applyShape(rings: RingSpec[], shape: RoseShape): RingSpec[] {
       // Bei wenigen Blättern etwas größere, damit die Blüte geschlossen bleibt (maximal +20 %).
       const fill = Math.min(1.2, 1 + Math.max(0, 1 - shape.petals / baseTotal) * 0.2);
       const height = r.height * size * fill;
-      const radius = r.radius * (0.35 + 1.1 * o) * size;
-      const elevation = r.elevation === undefined ? undefined : Math.max(4, Math.min(104, r.elevation + (0.5 - o) * 60));
+      const radius = r.radius * (0.12 + 0.8 * o) * size;
+      // Geschlossen: alle Blätter bis zu 60° steiler, innere lehnen über die Mitte (bis 108°).
+      const elevation = r.elevation === undefined ? undefined : Math.max(4, Math.min(108, r.elevation + (1 - o) * 60));
       const tilt = r.tilt * (shape.twist * 2);
       return { ...r, count, height, radius, elevation, tilt };
     })
@@ -264,7 +265,7 @@ export function createRoseModel(seed = 7, baseRings: RingSpec[] = SVG_RINGS, def
   order.forEach((p, i) => (p.releaseAt = (i + 1) / (order.length + 1)));
 
   // Blätter skalieren mit der sichtbaren Grundfläche der Blüte (Normalgröße bei Radius ~127).
-  const leafScale = Math.max(0.3, Math.min(1.4, footprint(RINGS) / 127));
+  const leafScale = Math.max(0.45, Math.min(1.4, footprint(RINGS) / 127));
   const leaves: Leaf[] = [52, 128, 205, 290, 340].map((angle, i) => {
     const len = 78 + ((i * 37) % 23);
     return { angle: angle + (rnd() - 0.5) * 10, radius: 46 * leafScale, size: leafScale, tilt: (rnd() - 0.5) * 14, ...leafPath(len) };

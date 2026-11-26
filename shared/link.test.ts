@@ -16,7 +16,7 @@ describe("Link-Kodierung", () => {
   it("trägt die Blütenform mit und lässt die Standardform weg", () => {
     const shaped = { color: "red" as const, message: "Hi", shape: { petals: 40, openness: 0.25, spread: 1.2, twist: 0.8 } };
     expect(decodeCard(encodeCard(shaped))).toEqual(shaped);
-    const standard = { color: "red" as const, message: "Hi", shape: { petals: 74, openness: 0.5, spread: 1, twist: 0.5 } };
+    const standard = { color: "red" as const, message: "Hi", shape: { petals: 74, openness: 1, spread: 1, twist: 0.5 } };
     expect(decodeCard(encodeCard(standard))).toEqual({ color: "red", message: "Hi" });
     expect(encodeCard(standard).length).toBeGreaterThan(encodeCard({ color: "red", message: "Hi" }).length); // s wird kodiert …
   });

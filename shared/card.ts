@@ -7,7 +7,7 @@ export type RoseColor = (typeof ROSE_COLORS)[number];
 export interface RoseShape {
   /** Gesamtzahl der Blütenblätter */
   petals: number;
-  /** 0 = geschlossene Knospe, 1 = voll erblüht */
+  /** 0 = fest geschlossene Knospe, 1 = offen (Standard) */
   openness: number;
   /** Größe der Blüte (Radius und Blattgröße), 1 = normal */
   spread: number;
@@ -22,7 +22,7 @@ export const SHAPE_LIMITS = {
   twist: { min: 0, max: 1, step: 0.01 },
 } as const;
 
-export const DEFAULT_SHAPE: RoseShape = { petals: 74, openness: 0.5, spread: 1, twist: 0.5 };
+export const DEFAULT_SHAPE: RoseShape = { petals: 74, openness: 1, spread: 1, twist: 0.5 };
 
 export interface CardData {
   color: RoseColor;

@@ -82,7 +82,7 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
   type ShapeKey = keyof RoseShape;
   const SLIDERS: { key: ShapeKey; label: string; format: (v: number) => string }[] = [
     { key: "petals", label: "Blätter", format: (v) => `${Math.round(v)}` },
-    { key: "openness", label: "Öffnung", format: (v) => (v < 0.2 ? "Knospe" : v < 0.45 ? "halb offen" : v < 0.75 ? "offen" : "voll erblüht") },
+    { key: "openness", label: "Öffnung", format: (v) => (v < 0.2 ? "geschlossen" : v < 0.5 ? "Knospe" : v < 0.8 ? "halb offen" : "offen") },
     { key: "spread", label: "Größe", format: (v) => `${Math.round(v * 100)} %` },
     { key: "twist", label: "Drehung", format: (v) => `${Math.round(v * 100)} %` },
   ];
