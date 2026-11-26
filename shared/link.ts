@@ -1,4 +1,4 @@
-import { validateCard, type CardData } from "./card";
+import { normalizeShape, validateCard, type CardData } from "./card";
 
 /**
  * Karte vollständig im Link kodieren (kein Backend nötig).
@@ -20,15 +20,24 @@ function base64UrlToBytes(text: string): Uint8Array {
 }
 
 export function encodeCard(card: CardData): string {
-  const compact: Record<string, string> = { c: card.color, m: card.message };
+  const compact: Record<string, string | number[]> = { c: card.color, m: card.message };
   if (card.from) compact.f = card.from;
+  if (card.shape) {
+    // kompakt als Ganzzahlen: Blätter, Öffnung %, Breite %, Drehung %
+    compact.s = [card.shape.petals, Math.round(card.shape.openness * 100), Math.round(card.shape.spread * 100), Math.round(card.shape.twist * 100)];
+  }
   return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(compact)));
 }
 
 export function decodeCard(encoded: string): CardData | null {
   try {
     const raw = JSON.parse(new TextDecoder().decode(base64UrlToBytes(encoded))) as Record<string, unknown>;
-    const result = validateCard({ color: raw.c, message: raw.m, from: raw.f });
+    let shape: unknown;
+    if (Array.isArray(raw.s) && raw.s.length === 4) {
+      const [p, o, sp, t] = raw.s as unknown[];
+      shape = normalizeShape({ petals: p, openness: Number(o) / 100, spread: Number(sp) / 100, twist: Number(t) / 100 });
+    }
+    const result = validateCard({ color: raw.c, message: raw.m, from: raw.f, shape });
     return result.ok ? result.card : null;
   } catch {
     return null;

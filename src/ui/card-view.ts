@@ -1,4 +1,4 @@
-import type { CardData } from "../../shared/card";
+import { DEFAULT_SHAPE, type CardData } from "../../shared/card";
 import { BlowDetector, GestureBlow } from "../blow/detector";
 import { h } from "../dom";
 import { RosePhysics } from "../rose/physics";
@@ -23,7 +23,7 @@ function messageSizeClass(message: string) {
 }
 
 export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewOptions = {}) {
-  const { model, rose } = createRose(card.color, opts.style);
+  const { model, rose } = createRose(card.color, opts.style, card.shape ?? DEFAULT_SHAPE);
   const threeD = model.defaultElevation < 90;
   const tilt = new TiltCamera(rose.getCamera());
   const mic = new BlowDetector();
@@ -37,6 +37,8 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
   );
 
   const stage = h("div", { class: "card__stage" }, rose.backEl, message, rose.el);
+  // Botschaft an die tatsächliche Blütengröße anpassen (kleine Knospe = kleinere Scheibe)
+  stage.style.setProperty("--rose-scale", (model.radius / 150).toFixed(3));
   const meter = h("div", { class: "meter" }, h("div", { class: "meter__fill" }));
   const hint = h("p", { class: "card__hint" }, "Puste sanft oder kräftig ins Mikrofon …");
 

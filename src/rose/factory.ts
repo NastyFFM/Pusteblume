@@ -1,5 +1,5 @@
 import type { PetalAtlas } from "../../shared/atlas";
-import type { RoseColor } from "../../shared/card";
+import { DEFAULT_SHAPE, type RoseColor, type RoseShape } from "../../shared/card";
 import { createRoseModel, type RoseModel } from "./model";
 import { createSpriteRoseModel } from "./sprite-model";
 import { RoseSvg } from "./svg-renderer";
@@ -14,12 +14,12 @@ export interface RoseInstance {
   spriteUrlFor(color: RoseColor): string | undefined;
 }
 
-export function createRose(color: RoseColor, style: RoseStyle = { kind: "svg" }): RoseInstance {
+export function createRose(color: RoseColor, style: RoseStyle = { kind: "svg" }, shape: RoseShape = DEFAULT_SHAPE): RoseInstance {
   if (style.kind === "sprite") {
-    const model = createSpriteRoseModel(style.atlas, style.baseUrl, color);
+    const model = createSpriteRoseModel(style.atlas, style.baseUrl, color, shape);
     const rose = new RoseSvg(model, color, { width: style.atlas.width, height: style.atlas.height });
     return { model, rose, spriteUrlFor: (c) => style.baseUrl + (style.atlas.images[c] ?? style.atlas.images.red ?? "") };
   }
-  const model = createRoseModel();
+  const model = createRoseModel(7, undefined, 90, shape);
   return { model, rose: new RoseSvg(model, color), spriteUrlFor: () => undefined };
 }

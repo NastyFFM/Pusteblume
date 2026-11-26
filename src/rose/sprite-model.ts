@@ -1,5 +1,5 @@
 import type { PetalAtlas } from "../../shared/atlas";
-import type { RoseColor } from "../../shared/card";
+import { DEFAULT_SHAPE, type RoseColor, type RoseShape } from "../../shared/card";
 import { createRoseModel, type Petal, type RingSpec, type RoseModel } from "./model";
 
 /**
@@ -27,8 +27,8 @@ const SPRITE_ELEVATION = 48;
  * ergibt sich aus Ring-Höhe / Sprite-Länge, damit innen kleine und außen große
  * Blätter liegen.
  */
-export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color: RoseColor, seed = 7): RoseModel {
-  const base = createRoseModel(seed, SPRITE_RINGS, SPRITE_ELEVATION);
+export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color: RoseColor, shape: RoseShape = DEFAULT_SHAPE, seed = 7): RoseModel {
+  const base = createRoseModel(seed, SPRITE_RINGS, SPRITE_ELEVATION, shape);
   const url = baseUrl + (atlas.images[color] ?? atlas.images.red ?? "");
   // Sprites sortieren: schmale, eingerollte (hohe Länge/Breite) nach innen, breite offene nach außen.
   const sorted = [...atlas.sprites].sort((a, b) => b.length / Math.max(1, b.width) - a.length / Math.max(1, a.width) || a.length - b.length);
@@ -40,7 +40,7 @@ export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color:
     const t = p.ring / Math.max(1, rings - 1);
     const idx = Math.min(sorted.length - 1, Math.max(0, Math.round(t * (sorted.length - 1) + ((p.id * 7) % 3) - 1)));
     const sprite = sorted[idx]!;
-    const targetLength = SPRITE_RINGS[p.ring]?.height ?? 60;
+    const targetLength = p.length;
     return {
       ...p,
       size: (targetLength / sprite.length) * p.size,

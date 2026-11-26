@@ -69,7 +69,7 @@ export class RoseSvg {
     this.backEl.appendChild(this.buildLeaves());
     // Deckscheibe hinter den Blättern: verdeckt Lücken zwischen Sprites, blendet mit dem Fortschritt aus.
     // In der Schrägansicht etwas größer, weil die Blüte dort vertikal gestaucht erscheint.
-    const backingR = model.radius * (model.defaultElevation < 90 ? 0.82 : 0.62);
+    const backingR = model.radius * (model.defaultElevation < 90 ? 0.82 : 0.72);
     this.backingRadius = backingR;
     this.backing = el("ellipse", { class: "rose__backing", cx: 0, cy: 0, rx: backingR, ry: backingR, fill: "url(#backing-grad)" });
     this.el.appendChild(this.backing);

@@ -1,4 +1,4 @@
-import type { RoseColor } from "../../shared/card";
+import { DEFAULT_SHAPE, type RoseColor, type RoseShape } from "../../shared/card";
 
 /**
  * Datenmodell der Rose. Bewusst renderer-neutral gehalten:
@@ -161,7 +161,37 @@ export const SVG_RINGS: RingSpec[] = [
 /** Ring-Index der Herzscheibe: liegt über Ring 2, unter Ring 0 und 1. */
 export const HEART_RING = 1.5;
 
-export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS, defaultElevation = 90): RoseModel {
+/**
+ * Blütenform auf die Ringe anwenden.
+ * - petals: Blattzahl proportional auf die Ringe verteilt (innen mindestens 3)
+ * - openness: Radius und (3D) Neigung; 0 = eng stehende Knospe, 1 = weit aufgeklappt
+ * - spread: Radius-Skalierung
+ * - twist: Stärke der spiraligen Drehung
+ */
+export function applyShape(rings: RingSpec[], shape: RoseShape): RingSpec[] {
+  const baseTotal = rings.reduce((n, r) => n + r.count, 0);
+  const factor = shape.petals / baseTotal;
+  const o = shape.openness;
+  return rings.map((r, i) => {
+    const count = Math.max(i === 0 ? 3 : 2, Math.round(r.count * factor));
+    // Bei wenigen Blättern deutlich größere, damit die Blüte geschlossen bleibt.
+    const height = r.height * (factor < 1 ? 1 + (1 - factor) * 0.5 : 1);
+    const radius = r.radius * (0.55 + 0.9 * o) * shape.spread;
+    const elevation = r.elevation === undefined ? undefined : Math.max(4, Math.min(102, r.elevation + (0.5 - o) * 56));
+    const tilt = r.tilt * (shape.twist * 2);
+    return { ...r, count, height, radius, elevation, tilt };
+  });
+}
+
+export function createRoseModel(seed = 7, baseRings: RingSpec[] = SVG_RINGS, defaultElevation = 90, shape: RoseShape = DEFAULT_SHAPE): RoseModel {
+  let RINGS = applyShape(baseRings, shape);
+  // Gesamtgröße begrenzen: Die Blüte muss in den Zeichenbereich (Radius 150) passen.
+  const outerRing = RINGS[RINGS.length - 1]!;
+  const outerRadius = outerRing.radius + outerRing.height * 0.95;
+  if (outerRadius > 140) {
+    const k = 140 / outerRadius;
+    RINGS = RINGS.map((r) => ({ ...r, radius: r.radius * k, height: r.height * k }));
+  }
   const rnd = mulberry32(seed);
   const petals: Petal[] = [];
   let id = 0;
@@ -170,7 +200,7 @@ export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS, default
     const offset = rnd() * 360;
     for (let i = 0; i < ring.count; i++) {
       const jitter = (rnd() - 0.5) * (360 / ring.count) * 0.35;
-      const { d, rim } = petalPath(ring.height, ring.openness);
+      const { d, rim } = petalPath(ring.height, ring.openness * (0.8 + 0.2 * shape.openness));
       petals.push({
         id: id++,
         ring: ringIndex,
