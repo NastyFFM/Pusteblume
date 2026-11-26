@@ -10,6 +10,11 @@ export interface PetalPose {
   rot: number;
   scale: number;
   alpha: number;
+  /** Bildschirm-Geschwindigkeit in Einheiten/s (für Bewegungsunschärfe); 0 = ruhend */
+  vx?: number;
+  vy?: number;
+  /** Trudeln: Drehung um die Längsachse des Blatts in Grad (0 = flach zum Betrachter) */
+  flip?: number;
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";

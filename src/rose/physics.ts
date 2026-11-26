@@ -116,7 +116,7 @@ export class RosePhysics {
         apply(petal, { dx: 0, dy: 0, rot: 0, scale: 1, alpha: 0 }, 0);
         continue;
       }
-      apply(petal, { dx: s.x, dy: s.y, rot: (s.rot * 180) / Math.PI, scale: s.scale, alpha: s.alpha }, 0);
+      apply(petal, { dx: s.x, dy: s.y, rot: (s.rot * 180) / Math.PI, scale: s.scale, alpha: s.alpha, vx: s.vx, vy: s.vy, flip: 0 }, 0);
     }
 
     if (attachedCount === 0 && !this.revealed) {
