@@ -31,10 +31,8 @@ const MOTION_STEPS: { speed: number; sigma: number }[] = [
 /** Fliegende Blätter ab dieser Skalierung (kommen dem Betrachter entgegen) werden leicht unscharf. */
 const NEAR_BLUR_SCALE = 1.3;
 
-/** Feste Tiefenschärfe-Stufen: hinten leicht unscharf, Mitte fast scharf, vorn scharf (kein Filter). */
+/** Nähe-Unschärfe für fliegende Blätter, die dem Betrachter entgegenkommen */
 const DOF_FAR = "url(#dof-far)";
-const DOF_MID = "url(#dof-mid)";
-const DOF_NEAR = "";
 
 /** DOM-Knoten eines Blatts samt gecachtem Zustand, damit pro Frame nur geänderte Attribute geschrieben werden. */
 interface PetalNode {
@@ -80,6 +78,16 @@ export class RoseSvg {
   private stemLight!: SVGPathElement;
   private readonly defs: SVGDefsElement;
   private readonly petalLayer: SVGGElement;
+  /**
+   * Tiefenschärfe in drei festen Ebenen: sitzende Blätter werden nach Tiefe gedrittelt und in
+   * die Gruppen hinten (leicht unscharf), Mitte (fast scharf) und vorn (scharf) einsortiert.
+   * Der Blur-Filter sitzt auf der Gruppe, nicht auf dem Blatt: zwei Filterläufe statt ~50.
+   * Fliegende Blätter liegen in einer eigenen Gruppe zuoberst und tragen ihren Filter selbst.
+   */
+  private readonly layerFar: SVGGElement;
+  private readonly layerMid: SVGGElement;
+  private readonly layerNear: SVGGElement;
+  private readonly layerFlying: SVGGElement;
   private backing!: SVGEllipseElement;
   private backingRadius = 0;
   /** weicher dunkler Verlauf über der Blütenmitte (über den Blättern) */
@@ -126,6 +134,11 @@ export class RoseSvg {
     this.backing = el("ellipse", { class: "rose__backing", cx: 0, cy: 0, rx: backingR, ry: backingR, fill: "url(#backing-grad)" });
     this.el.appendChild(this.backing);
     this.petalLayer = el("g", { class: "rose__petals" });
+    this.layerFar = el("g", { class: "rose__layer rose__layer--far", filter: "url(#dof-far)" });
+    this.layerMid = el("g", { class: "rose__layer rose__layer--mid", filter: "url(#dof-mid)" });
+    this.layerNear = el("g", { class: "rose__layer rose__layer--near" });
+    this.layerFlying = el("g", { class: "rose__layer rose__layer--flying" });
+    this.petalLayer.append(this.layerFar, this.layerMid, this.layerNear, this.layerFlying);
     this.el.appendChild(this.petalLayer);
     this.buildPetals();
     // Innere Verschattung: liegt über den Blättern, mit der Kamera als Ellipse projiziert.
@@ -166,8 +179,9 @@ export class RoseSvg {
 
   /**
    * Blattgruppen nach Tiefe ordnen: ferne zuerst, nahe zuletzt. Fliegende Blätter ganz oben.
-   * Dabei bekommen die sitzenden Blätter ihre Tiefenschärfe-Stufe (Drittel nach Tiefe):
-   * das passiert nur hier, also bei Kamerawechsel oder wenn ein Blatt zu fliegen beginnt/aufhört.
+   * Dabei werden die sitzenden Blätter nach Tiefe gedrittelt auf die drei Tiefenschärfe-Ebenen
+   * verteilt; das passiert nur hier, also bei Kamerawechsel oder wenn ein Blatt zu fliegen
+   * beginnt bzw. wieder sitzt. Die Ebenen liegen in der Reihenfolge hinten, Mitte, vorn, fliegend.
    */
   private sortByDepth() {
     if (!this.sortDirty) return;
@@ -179,13 +193,19 @@ export class RoseSvg {
     });
     const attached = order.filter((p) => this.lastPose.get(p.id)?.pose === undefined);
     const third = attached.length / 3;
-    attached.forEach((petal, i) => {
-      const node = this.petalNodes.get(petal.id);
-      if (node) this.applyFilter(node, i < third ? DOF_FAR : i < 2 * third ? DOF_MID : DOF_NEAR);
-    });
+    let i = 0;
     for (const petal of order) {
       const node = this.petalNodes.get(petal.id);
-      if (node) this.petalLayer.appendChild(node.g);
+      if (!node) continue;
+      if (this.lastPose.get(petal.id)?.pose !== undefined) {
+        this.layerFlying.appendChild(node.g);
+        continue;
+      }
+      // Sitzende Blätter tragen keinen eigenen Filter; die Ebene übernimmt das.
+      this.applyFilter(node, "");
+      const layer = i < third ? this.layerFar : i < 2 * third ? this.layerMid : this.layerNear;
+      layer.appendChild(node.g);
+      i++;
     }
   }
 
@@ -208,7 +228,7 @@ export class RoseSvg {
       const dirClass = ay < 0.42 * ax ? "h" : ax < 0.42 * ay ? "v" : "d";
       return `url(#mb-${dirClass}${step})`;
     }
-    return pose.scale > NEAR_BLUR_SCALE ? DOF_FAR : DOF_NEAR;
+    return pose.scale > NEAR_BLUR_SCALE ? DOF_FAR : "";
   }
 
   /**
@@ -367,10 +387,11 @@ export class RoseSvg {
   }
 
   /**
-   * Vordefinierte Unschärfe-Filter (ohne Farbbezug): drei Tiefenschärfe-Stufen (die vorderste
-   * ist "kein Filter") und je drei Stärken für horizontale, vertikale und diagonale
+   * Vordefinierte Unschärfe-Filter (ohne Farbbezug): zwei Tiefenschärfe-Stufen für die
+   * Ebenen hinten und Mitte (vorn ist "kein Filter"; `dof-far` dient zugleich fliegenden Blättern,
+   * die nah herankommen) und je drei Stärken für horizontale, vertikale und diagonale
    * Bewegungsunschärfe. Pro Blatt wird nur das `filter`-Attribut gewechselt, nie ein Filter angelegt.
-   * Die Filter sitzen auf der äußeren, nicht transformierten Gruppe, damit stdDeviation
+   * Die Filter sitzen auf nicht transformierten Gruppen, damit stdDeviation
    * in Bildschirm-(viewBox-)Einheiten und achsenparallel zum Bildschirm wirkt.
    */
   private buildFilterDefs(): SVGDefsElement {
@@ -380,13 +401,15 @@ export class RoseSvg {
       f.appendChild(el("feGaussianBlur", { stdDeviation: `${sx} ${sy}` }));
       defs.appendChild(f);
     };
-    blur("dof-far", 0.6, 0.6, 12);
-    blur("dof-mid", 0.22, 0.22, 8);
+    // Ränder knapp halten (ca. 3 sigma): jede Filterregion kostet Füllrate.
+    blur("dof-far", 0.6, 0.6, 6);
+    blur("dof-mid", 0.22, 0.22, 4);
     MOTION_STEPS.forEach(({ sigma }, i) => {
       const n = i + 1;
-      blur(`mb-h${n}`, sigma, sigma * 0.3, 25);
-      blur(`mb-v${n}`, sigma * 0.3, sigma, 25);
-      blur(`mb-d${n}`, sigma * 0.75, sigma * 0.75, 25);
+      const m = 8 + 4 * i;
+      blur(`mb-h${n}`, sigma, sigma * 0.3, m);
+      blur(`mb-v${n}`, sigma * 0.3, sigma, m);
+      blur(`mb-d${n}`, sigma * 0.75, sigma * 0.75, m);
     });
     return defs;
   }
@@ -505,7 +528,7 @@ export class RoseSvg {
 
       body.appendChild(shapeGroup);
       g.appendChild(body);
-      this.petalLayer.appendChild(g);
+      this.layerNear.appendChild(g); // applyCamera() verteilt gleich auf die Tiefen-Ebenen
       this.petalNodes.set(petal.id, { g, body, dark, light, sprite: petal.shape.kind === "sprite", filter: "", shade: -1, shadeMode: 0 });
     }
   }
