@@ -125,7 +125,7 @@ p { margin: 0; }
 /* Schlagschatten auf dem Untergrund: weiche Ellipse, Form und Versatz folgen der Kamera (per Frame nur transform/opacity). */
 .stage-shadow {
   position: absolute; left: 50%; top: 50%; border-radius: 50%; pointer-events: none; will-change: transform, opacity;
-  background: radial-gradient(closest-side, rgba(70, 30, 25, 0.42) 0%, rgba(70, 30, 25, 0.26) 42%, rgba(70, 30, 25, 0.08) 76%, rgba(70, 30, 25, 0) 100%);
+  background: radial-gradient(closest-side, rgba(70, 30, 25, 0.38) 0%, rgba(70, 30, 25, 0.22) 42%, rgba(70, 30, 25, 0.07) 76%, rgba(70, 30, 25, 0) 100%);
   transition: opacity 0.5s ease;
 }
 
@@ -136,6 +136,8 @@ p { margin: 0; }
   transform: translateY(calc(var(--gust) * -9%)) scale(calc(1 + var(--gust) * 0.22));
   transition: transform 0.45s ease-out;
 }
+/* Nach dem Öffnen hinter die Botschaft, damit keine Körnchen über dem Text schweben. */
+.card--revealed .motes { z-index: 0; }
 .mote {
   position: absolute; border-radius: 50%; opacity: 0;
   background: radial-gradient(circle, rgba(255, 250, 235, 0.95) 0%, rgba(255, 240, 210, 0.6) 45%, rgba(255, 235, 200, 0) 100%);
