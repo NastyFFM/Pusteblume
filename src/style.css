@@ -58,7 +58,7 @@ p { margin: 0; }
 .editor__preview {
   width: min(70vw, 300px); aspect-ratio: 1; margin: 0 auto;
   filter: drop-shadow(0 18px 24px rgba(60, 20, 20, 0.22));
-  animation: sway 6s ease-in-out infinite;
+  animation: breathe 6s ease-in-out infinite;
 }
 .editor__preview { position: relative; }
 .editor__preview .rose { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
@@ -109,12 +109,47 @@ p { margin: 0; }
 .card__stage .rose {
   position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;
   filter: drop-shadow(0 20px 26px rgba(60, 20, 20, 0.28));
-  animation: sway 7s ease-in-out infinite;
+  /* Atmen: kaum sichtbares Pulsieren. Liegt auf dem SVG-Element, die Blätter transformieren innen. */
+  animation: breathe 6s ease-in-out infinite;
   transform-origin: 50% 50%;
 }
 .rose--back { filter: drop-shadow(0 6px 10px rgba(20, 40, 20, 0.25)) !important; transition: opacity 0.8s ease, transform 0.9s ease; }
-.card--active .card__stage .rose { animation: none; }
-.card--revealed .rose--back { opacity: 0.55; transform: scale(1.08); }
+.card--revealed .rose--back { opacity: 0.55; transform: scale(1.08); animation: none; }
+
+/* Vignette: Ecken der Ansicht leicht abdunkeln, lenkt den Blick auf die Blüte. Liegt unter Overlay und Zurück-Button. */
+.card::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: radial-gradient(ellipse 78% 62% at 50% 44%, rgba(60, 30, 20, 0) 0%, rgba(60, 30, 20, 0) 58%, rgba(60, 30, 20, 0.18) 100%);
+}
+
+/* Schlagschatten auf dem Untergrund: weiche Ellipse, Form und Versatz folgen der Kamera (per Frame nur transform/opacity). */
+.stage-shadow {
+  position: absolute; left: 50%; top: 50%; border-radius: 50%; pointer-events: none; will-change: transform, opacity;
+  background: radial-gradient(closest-side, rgba(70, 30, 25, 0.42) 0%, rgba(70, 30, 25, 0.26) 42%, rgba(70, 30, 25, 0.08) 76%, rgba(70, 30, 25, 0) 100%);
+  transition: opacity 0.5s ease;
+}
+
+/* Pollen: winzige helle Körnchen, die langsam durch die Bühne treiben. Beim Pusten (--blow > 0.3) driftet die ganze Ebene nach oben/außen. */
+.motes {
+  position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible;
+  --gust: calc(max(0, var(--blow, 0) - 0.3) / 0.7);
+  transform: translateY(calc(var(--gust) * -9%)) scale(calc(1 + var(--gust) * 0.22));
+  transition: transform 0.45s ease-out;
+}
+.mote {
+  position: absolute; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, rgba(255, 250, 235, 0.95) 0%, rgba(255, 240, 210, 0.6) 45%, rgba(255, 235, 200, 0) 100%);
+  animation: mote-drift var(--dur, 12s) ease-in-out var(--delay, 0s) infinite;
+}
+
+/* Lichtpunkte: warmer Schein, wo sich ein Blatt löst. Pool fester Elemente, Position per transform, Aufblühen auf dem inneren Element. */
+.glows { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+.glow { position: absolute; left: 50%; top: 50%; }
+.glow__light {
+  width: 100%; height: 100%; border-radius: 50%; opacity: 0; will-change: transform, opacity;
+  background: radial-gradient(circle, rgba(255, 236, 190, 0.95) 0%, rgba(255, 200, 130, 0.55) 35%, rgba(255, 180, 110, 0) 70%);
+}
+.glow__light.is-lit { animation: glow-pop 0.52s ease-out; }
 
 .card__message {
   width: calc(var(--rose-scale, 0.85) * 68%); position: relative; z-index: 1; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; text-align: center;
@@ -133,7 +168,14 @@ p { margin: 0; }
 /* Schrägansicht: Die Botschaft liegt unter der Blüte und erscheint erst, wenn das letzte Blatt fällt. */
 .card--3d .card__message { width: calc(var(--rose-scale, 0.85) * 59%); opacity: 0; transition: opacity 0.9s ease, width 0.9s cubic-bezier(.2,.8,.2,1), aspect-ratio 0.9s ease, border-radius 0.9s ease, padding 0.9s ease; }
 .card--3d.card--revealed .card__message { opacity: 1; }
-.card--revealed .card__message { width: 100%; aspect-ratio: auto; border-radius: var(--radius); padding: 1.6rem 1.4rem; animation: glow 1.4s ease-out; }
+.card--revealed .card__message { width: 100%; aspect-ratio: auto; border-radius: var(--radius); padding: 1.6rem 1.4rem; }
+/* Aufglühen beim Freilegen: warmer Schein außen (box-shadow, einmalig) und innen (Overlay-Opazität), danach wieder normal. */
+.card__message::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 226, 170, 0.75) 0%, rgba(255, 210, 150, 0.3) 45%, rgba(255, 200, 140, 0) 75%);
+}
+.card__message.is-glowing { animation: message-glow 1.2s ease-out; }
+.card__message.is-glowing::after { animation: message-glow-inner 1.2s ease-out; }
 .card--revealed .card__stage .rose { pointer-events: none; }
 
 .card__hint { color: var(--ink-soft); font-size: 0.95rem; min-height: 1.4em; text-align: center; }
@@ -162,10 +204,25 @@ p { margin: 0; }
 .notice__text { color: var(--ink-soft); line-height: 1.5; }
 
 /* --- Animationen ------------------------------------------------------- */
-@keyframes sway { 0%, 100% { transform: rotate(-1.2deg) scale(1); } 50% { transform: rotate(1.2deg) scale(1.015); } }
-@keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.9); } 100% { box-shadow: 0 10px 30px -14px rgba(0,0,0,0.3); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.015); } }
+@keyframes message-glow {
+  0% { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 0 rgba(255, 214, 150, 0), 0 10px 30px -14px rgba(0,0,0,0.3); }
+  30% { box-shadow: inset 0 0 0 1px var(--line), 0 0 42px 10px rgba(255, 214, 150, 0.65), 0 10px 30px -14px rgba(0,0,0,0.3); }
+  100% { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 0 rgba(255, 214, 150, 0), 0 10px 30px -14px rgba(0,0,0,0.3); }
+}
+@keyframes message-glow-inner { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes glow-pop { 0% { transform: scale(0.35); opacity: 0; } 35% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.35); opacity: 0; } }
+@keyframes mote-drift {
+  0% { transform: translate(0, 0); opacity: 0; }
+  15% { opacity: var(--alpha, 0.4); }
+  50% { transform: translate(var(--dx, 0px), var(--dy, -20px)); }
+  85% { opacity: var(--alpha, 0.4); }
+  100% { transform: translate(0, 0); opacity: 0; }
+}
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .editor__preview, .card__stage .rose { animation: none; }
+  .editor__preview, .card__stage .rose, .mote { animation: none; }
+  .mote { opacity: var(--alpha, 0.4); }
+  .motes { transition: none; transform: none; }
 }

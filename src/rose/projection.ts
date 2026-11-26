@@ -76,12 +76,57 @@ export function placePetal(angle: number, radius: number, elevation: number, lif
   return { pivot: { x: out.x * radius, y: lift, z: out.z * radius }, dir, width, length };
 }
 
+/** Kreuzprodukt a × b */
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+}
+
+/**
+ * Feste Lichtrichtung im Raum (Einheitsvektor zur Lichtquelle): von vorn-oben-links.
+ * Sie dreht nicht mit der Kamera mit; die Rose steht fest im Raum, das Licht auch.
+ */
+const LIGHT: Vec3 = (() => {
+  const v = { x: -0.42, y: 0.72, z: 0.56 };
+  const n = Math.hypot(v.x, v.y, v.z);
+  return { x: v.x / n, y: v.y / n, z: v.z / n };
+})();
+
+/** Spanne des Helligkeitsfaktors: abgewandt .. zugewandt */
+export const LIGHT_MIN = 0.72;
+export const LIGHT_MAX = 1.08;
+
+/**
+ * Helligkeitsfaktor eines Blatts aus seiner Flächennormale (Lambert, beidseitig):
+ * `facing` ist die Normalkomponente zur Kamera (project(n).depth); zeigt die Normale
+ * von der Kamera weg, sehen wir die Rückseite und spiegeln sie. Bei fast kantiger
+ * Lage (|facing| klein, z. B. beim Trudeln) wird das Blatt zusätzlich etwas dunkler.
+ */
+export function lightFactor(normal: Vec3, facing: number): number {
+  const sign = facing < 0 ? -1 : 1;
+  const lambert = Math.max(0, sign * (normal.x * LIGHT.x + normal.y * LIGHT.y + normal.z * LIGHT.z));
+  // Weiche Kurve: Halbschatten bleibt sichtbar, nur klar abgewandte Flächen werden dunkel.
+  const lit = Math.pow(lambert, 0.8);
+  const edge = Math.abs(facing);
+  const edgeDarken = edge < 0.35 ? 1 - 0.15 * (1 - edge / 0.35) : 1;
+  return (LIGHT_MIN + (LIGHT_MAX - LIGHT_MIN) * lit) * edgeDarken;
+}
+
+export interface PetalTransform {
+  matrix: string;
+  depth: number;
+  /** Flächennormale (dir × width) nach Zusatzdrehung und Trudeln, im Raum */
+  normal: Vec3;
+  /** Normalkomponente zur Kamera: > 0 Vorderseite, < 0 Rückseite, ~0 kantig */
+  facing: number;
+}
+
 /**
  * SVG-matrix() für eine Blattgruppe: lokale Koordinaten (Pivot bei 0/0, Spitze bei -y)
  * werden in Bildschirmkoordinaten abgebildet. `extraRot` dreht zusätzlich in der Blattebene,
- * `scale` skaliert um den Pivot.
+ * `scale` skaliert um den Pivot. `flip` (Grad) dreht das Blatt um seine Längsachse
+ * (Trudeln): die Breitenachse wird um cos(flip) gestaucht, bei cos < 0 ist die Rückseite zu sehen.
  */
-export function petalMatrix(p: Placement3D, cam: Camera, scale: number, extraRot = 0): { matrix: string; depth: number } {
+export function petalMatrix(p: Placement3D, cam: Camera, scale: number, extraRot = 0, flip = 0): PetalTransform {
   let dir = p.dir;
   let width = p.width;
   if (extraRot) {
@@ -89,13 +134,23 @@ export function petalMatrix(p: Placement3D, cam: Camera, scale: number, extraRot
     dir = { x: p.dir.x * Math.cos(t) + p.width.x * Math.sin(t), y: p.dir.y * Math.cos(t) + p.width.y * Math.sin(t), z: p.dir.z * Math.cos(t) + p.width.z * Math.sin(t) };
     width = { x: -p.dir.x * Math.sin(t) + p.width.x * Math.cos(t), y: -p.dir.y * Math.sin(t) + p.width.y * Math.cos(t), z: -p.dir.z * Math.sin(t) + p.width.z * Math.cos(t) };
   }
+  let normal = cross(dir, width);
+  if (flip) {
+    // Drehung der Breitenachse um die Längsachse: w' = w·cos + n·sin, n' = n·cos − w·sin.
+    const f = flip * DEG;
+    const cf = Math.cos(f), sf = Math.sin(f);
+    const w2 = { x: width.x * cf + normal.x * sf, y: width.y * cf + normal.y * sf, z: width.z * cf + normal.z * sf };
+    normal = { x: normal.x * cf - width.x * sf, y: normal.y * cf - width.y * sf, z: normal.z * cf - width.z * sf };
+    width = w2;
+  }
   const P = project(p.pivot, cam);
   const D = project(dir, cam);
   const W = project(width, cam);
   const a = scale * W.x, b = scale * W.y;
   const c = -scale * D.x, d = -scale * D.y;
   const centre = project({ x: p.pivot.x + p.dir.x * p.length * 0.5, y: p.pivot.y + p.dir.y * p.length * 0.5, z: p.pivot.z + p.dir.z * p.length * 0.5 }, cam);
-  return { matrix: `matrix(${a.toFixed(4)} ${b.toFixed(4)} ${c.toFixed(4)} ${d.toFixed(4)} ${P.x.toFixed(2)} ${P.y.toFixed(2)})`, depth: centre.depth };
+  const facing = project(normal, cam).depth;
+  return { matrix: `matrix(${a.toFixed(4)} ${b.toFixed(4)} ${c.toFixed(4)} ${d.toFixed(4)} ${P.x.toFixed(2)} ${P.y.toFixed(2)})`, depth: centre.depth, normal, facing };
 }
 
 /** Matrix für eine flache Scheibe in der Ebene y = lift (z. B. Deckscheibe, Blütenboden). */

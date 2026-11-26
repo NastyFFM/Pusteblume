@@ -137,7 +137,7 @@ export class Ambience {
       { x: placement.pivot.x + placement.dir.x * half, y: placement.pivot.y + placement.dir.y * half, z: placement.pivot.z + placement.dir.z * half },
       camera,
     );
-    const { outer, inner } = this.glows[this.glowIndex];
+    const { outer, inner } = this.glows[this.glowIndex]!;
     this.glowIndex = (this.glowIndex + 1) % this.glows.length;
     outer.style.transform = `translate(-50%, -50%) translate(${stageLength(centre.x * UNIT)}, ${stageLength(centre.y * UNIT)})`;
 
