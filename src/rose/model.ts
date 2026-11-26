@@ -58,13 +58,28 @@ export interface Petal {
   shape: PetalShape;
 }
 
-export interface Leaf {
+/** Kelchblatt am Blütenansatz */
+export interface Sepal {
   angle: number;
   radius: number;
   size: number;
   tilt: number;
+  /** Neigung gegen die Horizontale in Grad */
+  elevation: number;
+  lift: number;
+  length: number;
   d: string;
-  vein: string;
+}
+
+export interface Stem {
+  /** Länge in Modell-Einheiten */
+  length: number;
+  /** Breite am Ansatz */
+  width: number;
+  /** Richtung (Einheitsvektor) im Raum, x rechts, y oben, z zum Betrachter */
+  dir: { x: number; y: number; z: number };
+  /** Höhe des Ansatzes */
+  lift: number;
 }
 
 export interface RoseModel {
@@ -75,7 +90,8 @@ export interface RoseModel {
   /** Standard-Kamera: Höhenwinkel in Grad (90 = von oben) */
   defaultElevation: number;
   petals: Petal[];
-  leaves: Leaf[];
+  stem: Stem;
+  sepals: Sepal[];
 }
 
 export interface Palette {
@@ -126,15 +142,14 @@ function petalPath(h: number, openness: number): { d: string; rim: string } {
   return { d, rim };
 }
 
-function leafPath(len: number): { d: string; vein: string } {
-  const w = len * 0.42;
-  const d = [
+/** Schmales, spitzes Kelchblatt; Basis bei (0,0), Spitze bei (0,-len). */
+function sepalPath(len: number): string {
+  const w = len * 0.22;
+  return [
     `M 0 0`,
-    `C ${-w * 0.9} ${-len * 0.15}, ${-w * 1.1} ${-len * 0.62}, 0 ${-len}`,
-    `C ${w * 1.1} ${-len * 0.62}, ${w * 0.9} ${-len * 0.15}, 0 0 Z`,
+    `C ${-w * 1.2} ${-len * 0.2}, ${-w * 0.9} ${-len * 0.7}, 0 ${-len}`,
+    `C ${w * 0.9} ${-len * 0.7}, ${w * 1.2} ${-len * 0.2}, 0 0 Z`,
   ].join(" ");
-  const vein = `M 0 ${-len * 0.05} L 0 ${-len * 0.92}`;
-  return { d, vein };
 }
 
 export interface RingSpec {
@@ -264,17 +279,39 @@ export function createRoseModel(seed = 7, baseRings: RingSpec[] = SVG_RINGS, def
   const order = petals.filter((p) => p.ring !== HEART_RING).sort((a, b) => b.ring - a.ring || rnd() - 0.5);
   order.forEach((p, i) => (p.releaseAt = (i + 1) / (order.length + 1)));
 
-  // Blätter skalieren mit der sichtbaren Grundfläche der Blüte (Normalgröße bei Radius ~127).
-  const leafScale = Math.max(0.45, Math.min(1.4, footprint(RINGS) / 127));
-  const leaves: Leaf[] = [52, 128, 205, 290, 340].map((angle, i) => {
-    const len = 78 + ((i * 37) % 23);
-    return { angle: angle + (rnd() - 0.5) * 10, radius: 46 * leafScale, size: leafScale, tilt: (rnd() - 0.5) * 14, ...leafPath(len) };
-  });
-
   const radius = Math.max(20, footprint(RINGS));
+  const size = shape.spread;
+  const threeD = defaultElevation < 90;
+
+  // Stiel: nach unten, leicht zum Betrachter; in der Draufsicht liegt er unter der Blüte nach vorn.
+  const rawDir = threeD ? { x: 0.05, y: -1, z: 0.3 } : { x: 0.1, y: -0.3, z: 1 };
+  const len = Math.hypot(rawDir.x, rawDir.y, rawDir.z);
+  const stem: Stem = {
+    // In der Draufsicht muss der Stiel unter der Blüte hervorragen.
+    length: threeD ? 125 * Math.max(0.5, size) : radius + 55,
+    width: 7 * Math.max(0.6, size),
+    dir: { x: rawDir.x / len, y: rawDir.y / len, z: rawDir.z / len },
+    lift: -3,
+  };
+
+  // Kelchblätter: fünf schmale Spitzen um den Ansatz, etwas flacher als der äußerste Ring.
+  const outerElevation = RINGS[RINGS.length - 1]?.elevation ?? 0;
+  const sepals: Sepal[] = [0, 72, 144, 216, 288].map((angle) => {
+    const length = (26 + rnd() * 8) * Math.max(0.5, size);
+    return {
+      angle: angle + 20 + (rnd() - 0.5) * 16,
+      radius: 3 * size,
+      size: 1,
+      tilt: (rnd() - 0.5) * 10,
+      elevation: Math.max(-10, Math.min(60, outerElevation - 25)),
+      lift: -2,
+      length,
+      d: sepalPath(length),
+    };
+  });
   // Deckscheibe: in der Schrägansicht bei geschlossener Knospe kleiner, da die Blätter stehen.
   const backingRadius = radius * (defaultElevation < 90 ? 0.5 + 0.32 * shape.openness : 0.72);
-  return { radius, backingRadius, defaultElevation, petals, leaves };
+  return { radius, backingRadius, defaultElevation, petals, stem, sepals };
 }
 
 /** Weltposition des Pivots eines Blatts (Blütenmitte = Ursprung, Winkel 0 = oben). */

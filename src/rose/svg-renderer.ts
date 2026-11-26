@@ -1,6 +1,6 @@
 import type { RoseColor } from "../../shared/card";
 import { HEART_RING, PALETTES, type Petal, type RoseModel } from "./model";
-import { discMatrix, petalMatrix, placePetal, type Camera, type Placement3D } from "./projection";
+import { discMatrix, petalMatrix, placePetal, project, type Camera, type Placement3D } from "./projection";
 
 export interface PetalPose {
   /** Verschiebung des Pivots gegenüber der Ruhelage */
@@ -35,7 +35,9 @@ export class RoseSvg {
   private readonly depths = new Map<number, number>();
   /** zuletzt gesetzte Pose je Blatt, damit ein Kamerawechsel sie neu projizieren kann */
   private readonly lastPose = new Map<number, { pose?: PetalPose; tremble: number }>();
-  private readonly leafGroups: { g: SVGGElement; placement: Placement3D; size: number }[] = [];
+  private readonly sepalGroups: { g: SVGGElement; placement: Placement3D; size: number }[] = [];
+  private stemBody!: SVGPathElement;
+  private stemLight!: SVGPathElement;
   private readonly defs: SVGDefsElement;
   private readonly petalLayer: SVGGElement;
   private backing!: SVGEllipseElement;
@@ -66,7 +68,12 @@ export class RoseSvg {
     this.buildDefs();
 
     this.backEl = el("svg", { viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`, class: "rose rose--back", "aria-hidden": "true" });
-    this.backEl.appendChild(this.buildLeaves());
+    const backDefs = el("defs");
+    const stemGrad = el("linearGradient", { id: "stem-grad", x1: 0, y1: 0, x2: 1, y2: 0 });
+    stemGrad.append(el("stop", { offset: 0, "stop-color": "#2e6228" }), el("stop", { offset: 0.5, "stop-color": "#4a8a3c" }), el("stop", { offset: 1, "stop-color": "#2a5a25" }));
+    backDefs.appendChild(stemGrad);
+    this.backEl.appendChild(backDefs);
+    this.backEl.appendChild(this.buildStem());
     // Deckscheibe hinter den Blättern: verdeckt Lücken zwischen Sprites, blendet mit dem Fortschritt aus.
     // In der Schrägansicht etwas größer, weil die Blüte dort vertikal gestaucht erscheint.
     const backingR = model.backingRadius;
@@ -94,7 +101,8 @@ export class RoseSvg {
 
   private applyCamera() {
     this.backing.setAttribute("transform", discMatrix(this.camera, 1));
-    for (const { g, placement, size } of this.leafGroups) g.setAttribute("transform", petalMatrix(placement, this.camera, size).matrix);
+    for (const { g, placement, size } of this.sepalGroups) g.setAttribute("transform", petalMatrix(placement, this.camera, size).matrix);
+    this.updateStem();
     for (const petal of this.model.petals) {
       const last = this.lastPose.get(petal.id);
       if (last?.pose) this.setPose(petal, last.pose);
@@ -206,9 +214,6 @@ export class RoseSvg {
       el("stop", { offset: 0.5, "stop-color": pal.deep }),
       el("stop", { offset: 1, "stop-color": pal.base }),
     );
-    const leaf = el("linearGradient", { id: "leaf-grad", x1: 0, y1: 1, x2: 0, y2: 0 });
-    leaf.append(el("stop", { offset: 0, "stop-color": "#1d4a24" }), el("stop", { offset: 1, "stop-color": "#4f8a3e" }));
-
     // Deckscheibe: dunkle Mitte, zum Rand hin Blattfarbe, damit sie durch Lücken wie Blütenmasse wirkt.
     const backing = el("radialGradient", { id: "backing-grad" });
     backing.append(
@@ -221,25 +226,55 @@ export class RoseSvg {
     const shadow = el("filter", { id: "petal-shadow", x: "-30%", y: "-30%", width: "160%", height: "160%" });
     shadow.append(el("feDropShadow", { dx: 0, dy: 1.2, stdDeviation: 1.4, "flood-color": pal.heart, "flood-opacity": 0.45 }));
 
-    this.defs.append(outer, inner, leaf, backing, shadow);
+    this.defs.append(outer, inner, backing, shadow);
     this.el.style.setProperty("--rim", pal.rim);
     this.el.style.setProperty("--deep", pal.deep);
   }
 
-  private buildLeaves(): SVGGElement {
-    const layer = el("g", { class: "rose__leaves" });
-    for (const leaf of this.model.leaves) {
-      // Blätter liegen leicht hängend um den Blütenboden.
-      const placement = placePetal(leaf.angle, leaf.radius, -8, -6, leaf.tilt, 80);
-      const g = el("g", { transform: petalMatrix(placement, this.camera, leaf.size).matrix });
-      this.leafGroups.push({ g, placement, size: leaf.size });
-      g.append(
-        el("path", { d: leaf.d, fill: "#2f6b2f", stroke: "#163a1c", "stroke-width": 1.2, "stroke-linejoin": "round" }),
-        el("path", { d: leaf.vein, stroke: "#9cc77f", "stroke-width": 1, "stroke-opacity": 0.6, fill: "none" }),
-      );
+  private buildStem(): SVGGElement {
+    const layer = el("g", { class: "rose__stem" });
+    this.stemBody = el("path", { fill: "url(#stem-grad)", stroke: "#1f4a1e", "stroke-width": 0.8, "stroke-linejoin": "round" });
+    this.stemLight = el("path", { fill: "none", stroke: "#a6d48a", "stroke-opacity": 0.55, "stroke-width": 1.2, "stroke-linecap": "round" });
+    layer.append(this.stemBody, this.stemLight);
+    for (const sepal of this.model.sepals) {
+      const placement = placePetal(sepal.angle, sepal.radius, sepal.elevation, sepal.lift, sepal.tilt, sepal.length);
+      const g = el("g");
+      g.appendChild(el("path", { d: sepal.d, fill: "#3f7a33", stroke: "#1f4a1e", "stroke-width": 0.7, "stroke-linejoin": "round" }));
+      this.sepalGroups.push({ g, placement, size: sepal.size });
       layer.appendChild(g);
     }
     return layer;
+  }
+
+  /** Stiel als leicht gebogenes, nach unten schmaler werdendes Band in Bildschirmkoordinaten. */
+  private updateStem() {
+    const { stem } = this.model;
+    const base = { x: 0, y: stem.lift, z: 0 };
+    const tip = { x: stem.dir.x * stem.length, y: stem.lift + stem.dir.y * stem.length, z: stem.dir.z * stem.length };
+    const P0 = project(base, this.camera);
+    const P1 = project(tip, this.camera);
+    const dx = P1.x - P0.x, dy = P1.y - P0.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 2) {
+      this.stemBody.setAttribute("d", "");
+      this.stemLight.setAttribute("d", "");
+      return;
+    }
+    const nx = -dy / len, ny = dx / len; // Normale in der Bildebene
+    const w0 = stem.width / 2, w1 = stem.width * 0.35;
+    // leichte Biegung: Kontrollpunkt seitlich versetzt
+    const bend = Math.min(10, len * 0.08);
+    const cx = (P0.x + P1.x) / 2 + nx * bend, cy = (P0.y + P1.y) / 2 + ny * bend;
+    const f = (v: number) => v.toFixed(2);
+    this.stemBody.setAttribute(
+      "d",
+      `M ${f(P0.x + nx * w0)} ${f(P0.y + ny * w0)} Q ${f(cx + nx * (w0 + w1) / 2)} ${f(cy + ny * (w0 + w1) / 2)} ${f(P1.x + nx * w1)} ${f(P1.y + ny * w1)} ` +
+        `L ${f(P1.x - nx * w1)} ${f(P1.y - ny * w1)} Q ${f(cx - nx * (w0 + w1) / 2)} ${f(cy - ny * (w0 + w1) / 2)} ${f(P0.x - nx * w0)} ${f(P0.y - ny * w0)} Z`,
+    );
+    this.stemLight.setAttribute(
+      "d",
+      `M ${f(P0.x + nx * w0 * 0.35)} ${f(P0.y + ny * w0 * 0.35 + 4)} Q ${f(cx + nx * w0 * 0.35)} ${f(cy + ny * w0 * 0.35)} ${f(P1.x + nx * w1 * 0.3)} ${f(P1.y + ny * w1 * 0.3 - 4)}`,
+    );
   }
 
   private buildPetals() {

@@ -14,7 +14,8 @@ Die App läuft rein im Frontend, ohne Server und ohne Datenbank. Production-Bran
 - **Karte** (`/v/<kodierte Karte>`): Rose über der Botschaft, Pust-Erkennung per Web Audio API,
   Fallback per Wischen (ohne Mikrofon) und Leertaste (Desktop).
 - **Links**: Die Karte steckt vollständig im Link (base64url-kodiertes JSON). Nichts wird gespeichert.
-- **Rose**: aktuell prozedurales SVG (Blütenblatt-Pfade in Ringen, Herzscheibe, Blätter in eigener Ebene hinter der Botschaft).
+- **Rose**: Sprite-Atlas aus echten Blattfotos (Standard) oder prozedurales SVG; Stiel und Kelchblätter liegen in einer
+  eigenen Ebene hinter der Botschaft und werden mit derselben Kamera projiziert.
 
 ## Entwicklung
 
