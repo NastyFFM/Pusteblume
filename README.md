@@ -69,10 +69,13 @@ Schritte in `tools/build-atlas.ts`:
 
 `tools/lib/fixture.test.ts` prüft Pivot und Winkel gegen die bekannten Werte des synthetischen Sheets,
 `tools/lib/ai-fixture.test.ts` gegen die ChatGPT-Sheets unter `tools/fixtures/ai/` (alle Basen unten).
-Atlanten: `rose1` (nur Außenblätter) und `rose2` (Außen- plus Innenblätter, beide Sheets in einem Atlas),
-sichtbar mit `?rose=rose1` bzw. `?rose=rose2`. Mehrere Sheets: `npm run atlas -- a.png b.png name`.
+Atlanten: `rose1` (nur Außenblätter) und `rose2` (Außen- plus Innenblätter, beide Sheets in einem Atlas, Standard).
+Mehrere Sheets: `npm run atlas -- a.png b.png name --scale 0.7`.
 
-Im Frontend wählt `?rose=<name>` den Atlas unter `public/rose/<name>/`. Ohne Parameter bleibt die SVG-Rose.
+Im Frontend ist der Atlas `rose2` Standard. `?rose=<name>` wählt einen anderen unter `public/rose/<name>/`,
+`?rose=svg` die gezeichnete SVG-Rose. Lädt ein Atlas nicht, fällt die Karte auf SVG zurück.
+`--scale 0.7` beim Bauen verkleinert die Quellbilder; die Atlanten liegen bei rund 700 KB je Farbe
+(Fotostrukturen komprimieren in PNG schlecht, WebP wäre der nächste Schritt).
 `src/rose/sprite-model.ts` verteilt die Sprites auf die Ringe (kurze, schmale nach innen), der Renderer schneidet
 jeden Ausschnitt per verschachteltem `<svg viewBox>` aus dem Atlasbild.
 

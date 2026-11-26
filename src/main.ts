@@ -29,14 +29,17 @@ function writeJson(key: string, value: unknown) {
 
 let activeView: { destroy(): void } | null = null;
 
-/** Rosen-Darstellung aus der URL: ?rose=<atlasname> lädt einen Sprite-Atlas, sonst SVG. */
+/** Standard-Atlas; ?rose=<name> wählt einen anderen, ?rose=svg die gezeichnete Rose. */
+const DEFAULT_ROSE = "rose2";
+
+/** Rosen-Darstellung aus der URL. Fällt auf SVG zurück, wenn der Atlas nicht lädt. */
 let roseStyle: RoseStyle = { kind: "svg" };
 let roseStyleLoaded: Promise<void> | null = null;
 
 function ensureRoseStyle(): Promise<void> {
   roseStyleLoaded ??= (async () => {
-    const name = new URLSearchParams(location.search).get("rose");
-    if (!name || !/^[a-z0-9-]+$/i.test(name)) return;
+    const name = new URLSearchParams(location.search).get("rose") ?? DEFAULT_ROSE;
+    if (name === "svg" || !/^[a-z0-9-]+$/i.test(name)) return;
     try {
       const { atlas, baseUrl } = await loadAtlas(name);
       roseStyle = { kind: "sprite", atlas, baseUrl };

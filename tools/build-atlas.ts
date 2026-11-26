@@ -1,7 +1,7 @@
 /**
  * Pipeline: Blätter-Bild -> freigestellte Einzelblätter -> Sprite-Atlas + Pivots.
  *
- *   npx tsx tools/build-atlas.ts <eingabe.png> [weitere.png ...] <name> [--min-area 300] [--tolerance 40]
+ *   npx tsx tools/build-atlas.ts <eingabe.png> [weitere.png ...] <name> [--min-area 300] [--tolerance 40] [--scale 1]
  *
  * Erzeugt public/rose/<name>/petals.json sowie atlas-red.png, atlas-white.png, atlas-yellow.png.
  * Eingabe: ein oder mehrere Bilder mit Blütenblättern auf einfarbigem Hintergrund (oder mit Alphakanal),
@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AtlasSprite, PetalAtlas } from "../shared/atlas";
 import { analyzePetal, findBlobs, removeBackground } from "./lib/blobs";
-import { blit, createImage, loadPng, savePng } from "./lib/image";
+import { blit, createImage, downscale, loadPng, savePng } from "./lib/image";
 import { packShelves } from "./lib/pack";
 import { recolor, type RoseTint } from "./lib/recolor";
 
@@ -20,18 +20,21 @@ export interface BuildOptions {
   tolerance?: number;
   padding?: number;
   maxWidth?: number;
+  /** Quellbilder vorab verkleinern (0..1), z. B. 0.7 für kleinere Atlanten */
+  scale?: number;
 }
 
 export function buildAtlas(inputPaths: string | string[], outDir: string, opts: BuildOptions = {}): PetalAtlas {
-  const { minArea = 300, tolerance = 40, padding = 4, maxWidth = 2048 } = opts;
+  const { minArea = 300, tolerance = 40, padding = 4, maxWidth = 2048, scale = 1 } = opts;
   const paths = Array.isArray(inputPaths) ? inputPaths : [inputPaths];
 
   // Blobs aller Eingabebilder einsammeln; jeder Blob merkt sich sein Quellbild.
   const entries: { blob: ReturnType<typeof findBlobs>[number]; src: ReturnType<typeof loadPng> }[] = [];
   for (const path of paths) {
-    const src = loadPng(path);
+    let src = loadPng(path);
     removeBackground(src, tolerance);
-    const found = findBlobs(src, minArea);
+    if (scale < 1) src = downscale(src, scale);
+    const found = findBlobs(src, Math.round(minArea * scale * scale));
     if (found.length === 0) throw new Error(`Keine Blütenblätter in ${path} gefunden. Hintergrund zu unruhig oder Toleranz zu klein?`);
     for (const blob of found) entries.push({ blob, src });
   }
@@ -138,7 +141,7 @@ if (process.argv[1] && /build-atlas\.ts$/.test(process.argv[1])) {
     return i >= 0 ? Number(rest[i + 1]) : undefined;
   };
   const outDir = join("public", "rose", name);
-  const atlas = buildAtlas(inputs, outDir, { minArea: opt("--min-area"), tolerance: opt("--tolerance") });
+  const atlas = buildAtlas(inputs, outDir, { minArea: opt("--min-area"), tolerance: opt("--tolerance"), scale: opt("--scale") });
   console.log(`${atlas.sprites.length} Blätter -> ${outDir} (${atlas.width}x${atlas.height})`);
   for (const [i, s] of atlas.sprites.entries()) {
     console.log(`  #${i}: ${s.w}x${s.h} Länge ${s.length} Breite ${s.width} Pivot (${s.pivot.x.toFixed(0)},${s.pivot.y.toFixed(0)}) Rotation ${s.rotation}°`);
