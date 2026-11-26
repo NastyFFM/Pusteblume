@@ -9,16 +9,16 @@ export interface RoseShape {
   petals: number;
   /** 0 = geschlossene Knospe, 1 = voll erblüht */
   openness: number;
-  /** Breite der Blüte, 1 = normal */
+  /** Größe der Blüte (Radius und Blattgröße), 1 = normal */
   spread: number;
   /** Spiralige Drehung der Blätter, 0 = keine, 1 = stark */
   twist: number;
 }
 
 export const SHAPE_LIMITS = {
-  petals: { min: 12, max: 110, step: 1 },
+  petals: { min: 5, max: 110, step: 1 },
   openness: { min: 0, max: 1, step: 0.01 },
-  spread: { min: 0.6, max: 1.4, step: 0.01 },
+  spread: { min: 0.3, max: 1.4, step: 0.01 },
   twist: { min: 0, max: 1, step: 0.01 },
 } as const;
 

@@ -8,7 +8,7 @@ Die App läuft rein im Frontend, ohne Server und ohne Datenbank. Production-Bran
 
 ## Was drin ist
 
-- **Editor** (`/`): Rosenfarbe (rot, weiß, gelb), Botschaft, Absender, Blütenform (Blattzahl, Öffnung, Breite, Drehung)
+- **Editor** (`/`): Rosenfarbe (rot, weiß, gelb), Botschaft, Absender, Blütenform (Blattzahl 5–110, Öffnung, Größe 30–140 %, Drehung)
   mit Live-Vorschau, Link erzeugen, kopieren oder teilen. Die Form wandert mit in den Link (`shared/card.ts`, `RoseShape`),
   Standardwerte werden weggelassen.
 - **Karte** (`/v/<kodierte Karte>`): Rose über der Botschaft, Pust-Erkennung per Web Audio API,

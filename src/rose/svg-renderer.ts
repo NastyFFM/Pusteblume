@@ -35,7 +35,7 @@ export class RoseSvg {
   private readonly depths = new Map<number, number>();
   /** zuletzt gesetzte Pose je Blatt, damit ein Kamerawechsel sie neu projizieren kann */
   private readonly lastPose = new Map<number, { pose?: PetalPose; tremble: number }>();
-  private readonly leafGroups: { g: SVGGElement; placement: Placement3D }[] = [];
+  private readonly leafGroups: { g: SVGGElement; placement: Placement3D; size: number }[] = [];
   private readonly defs: SVGDefsElement;
   private readonly petalLayer: SVGGElement;
   private backing!: SVGEllipseElement;
@@ -69,7 +69,7 @@ export class RoseSvg {
     this.backEl.appendChild(this.buildLeaves());
     // Deckscheibe hinter den Blättern: verdeckt Lücken zwischen Sprites, blendet mit dem Fortschritt aus.
     // In der Schrägansicht etwas größer, weil die Blüte dort vertikal gestaucht erscheint.
-    const backingR = model.radius * (model.defaultElevation < 90 ? 0.82 : 0.72);
+    const backingR = model.backingRadius;
     this.backingRadius = backingR;
     this.backing = el("ellipse", { class: "rose__backing", cx: 0, cy: 0, rx: backingR, ry: backingR, fill: "url(#backing-grad)" });
     this.el.appendChild(this.backing);
@@ -94,7 +94,7 @@ export class RoseSvg {
 
   private applyCamera() {
     this.backing.setAttribute("transform", discMatrix(this.camera, 1));
-    for (const { g, placement } of this.leafGroups) g.setAttribute("transform", petalMatrix(placement, this.camera, 1).matrix);
+    for (const { g, placement, size } of this.leafGroups) g.setAttribute("transform", petalMatrix(placement, this.camera, size).matrix);
     for (const petal of this.model.petals) {
       const last = this.lastPose.get(petal.id);
       if (last?.pose) this.setPose(petal, last.pose);
@@ -232,7 +232,7 @@ export class RoseSvg {
       // Blätter liegen leicht hängend um den Blütenboden.
       const placement = placePetal(leaf.angle, leaf.radius, -8, -6, leaf.tilt, 80);
       const g = el("g", { transform: petalMatrix(placement, this.camera, leaf.size).matrix });
-      this.leafGroups.push({ g, placement });
+      this.leafGroups.push({ g, placement, size: leaf.size });
       g.append(
         el("path", { d: leaf.d, fill: "#2f6b2f", stroke: "#163a1c", "stroke-width": 1.2, "stroke-linejoin": "round" }),
         el("path", { d: leaf.vein, stroke: "#9cc77f", "stroke-width": 1, "stroke-opacity": 0.6, fill: "none" }),

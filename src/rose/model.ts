@@ -70,6 +70,8 @@ export interface Leaf {
 export interface RoseModel {
   /** Blüten-Radius in Modell-Einheiten (viewBox ist -150..150) */
   radius: number;
+  /** Radius der Deckscheibe hinter den Blättern */
+  backingRadius: number;
   /** Standard-Kamera: Höhenwinkel in Grad (90 = von oben) */
   defaultElevation: number;
   petals: Petal[];
@@ -170,24 +172,43 @@ export const HEART_RING = 1.5;
  */
 export function applyShape(rings: RingSpec[], shape: RoseShape): RingSpec[] {
   const baseTotal = rings.reduce((n, r) => n + r.count, 0);
-  const factor = shape.petals / baseTotal;
   const o = shape.openness;
-  return rings.map((r, i) => {
-    const count = Math.max(i === 0 ? 3 : 2, Math.round(r.count * factor));
-    // Bei wenigen Blättern deutlich größere, damit die Blüte geschlossen bleibt.
-    const height = r.height * (factor < 1 ? 1 + (1 - factor) * 0.5 : 1);
-    const radius = r.radius * (0.55 + 0.9 * o) * shape.spread;
-    const elevation = r.elevation === undefined ? undefined : Math.max(4, Math.min(102, r.elevation + (0.5 - o) * 56));
-    const tilt = r.tilt * (shape.twist * 2);
-    return { ...r, count, height, radius, elevation, tilt };
-  });
+  const size = shape.spread;
+
+  // Blattzahl proportional verteilen, Reste von innen nach außen vergeben; leere Ringe fallen weg.
+  const counts = rings.map((r) => Math.floor((r.count / baseTotal) * shape.petals));
+  let rest = shape.petals - counts.reduce((a, b) => a + b, 0);
+  for (let i = 0; rest > 0; i = (i + 1) % counts.length, rest--) counts[i]!++;
+  if (counts[0]! < 3) {
+    // Innerster Ring braucht mindestens 3 Blätter, damit die Mitte geschlossen ist.
+    for (let i = counts.length - 1; i > 0 && counts[0]! < 3; i--) {
+      while (counts[i]! > 0 && counts[0]! < 3) { counts[i]!--; counts[0]!++; }
+    }
+    counts[0] = Math.max(3, counts[0]!);
+  }
+
+  return rings
+    .map((r, i) => {
+      const count = counts[i]!;
+      // Bei wenigen Blättern etwas größere, damit die Blüte geschlossen bleibt (maximal +20 %).
+      const fill = Math.min(1.2, 1 + Math.max(0, 1 - shape.petals / baseTotal) * 0.2);
+      const height = r.height * size * fill;
+      const radius = r.radius * (0.35 + 1.1 * o) * size;
+      const elevation = r.elevation === undefined ? undefined : Math.max(4, Math.min(104, r.elevation + (0.5 - o) * 60));
+      const tilt = r.tilt * (shape.twist * 2);
+      return { ...r, count, height, radius, elevation, tilt };
+    })
+    .filter((r) => r.count > 0);
 }
 
 export function createRoseModel(seed = 7, baseRings: RingSpec[] = SVG_RINGS, defaultElevation = 90, shape: RoseShape = DEFAULT_SHAPE): RoseModel {
   let RINGS = applyShape(baseRings, shape);
+  // Sichtbare Grundfläche: Basisabstand plus waagerechter Anteil der Blattlänge
+  // (stehende Blätter einer Knospe tragen kaum zur Breite bei).
+  const footprint = (rings: RingSpec[]) =>
+    Math.max(...rings.map((r) => r.radius + r.height * Math.cos(((r.elevation ?? 0) * Math.PI) / 180) * 0.95));
   // Gesamtgröße begrenzen: Die Blüte muss in den Zeichenbereich (Radius 150) passen.
-  const outerRing = RINGS[RINGS.length - 1]!;
-  const outerRadius = outerRing.radius + outerRing.height * 0.95;
+  const outerRadius = footprint(RINGS);
   if (outerRadius > 140) {
     const k = 140 / outerRadius;
     RINGS = RINGS.map((r) => ({ ...r, radius: r.radius * k, height: r.height * k }));
@@ -242,13 +263,17 @@ export function createRoseModel(seed = 7, baseRings: RingSpec[] = SVG_RINGS, def
   const order = petals.filter((p) => p.ring !== HEART_RING).sort((a, b) => b.ring - a.ring || rnd() - 0.5);
   order.forEach((p, i) => (p.releaseAt = (i + 1) / (order.length + 1)));
 
+  // Blätter skalieren mit der sichtbaren Grundfläche der Blüte (Normalgröße bei Radius ~127).
+  const leafScale = Math.max(0.3, Math.min(1.4, footprint(RINGS) / 127));
   const leaves: Leaf[] = [52, 128, 205, 290, 340].map((angle, i) => {
     const len = 78 + ((i * 37) % 23);
-    return { angle: angle + (rnd() - 0.5) * 10, radius: 46, size: 1, tilt: (rnd() - 0.5) * 14, ...leafPath(len) };
+    return { angle: angle + (rnd() - 0.5) * 10, radius: 46 * leafScale, size: leafScale, tilt: (rnd() - 0.5) * 14, ...leafPath(len) };
   });
 
-  const outer = RINGS[RINGS.length - 1]!;
-  return { radius: outer.radius + outer.height * 0.95, defaultElevation, petals, leaves };
+  const radius = Math.max(20, footprint(RINGS));
+  // Deckscheibe: in der Schrägansicht bei geschlossener Knospe kleiner, da die Blätter stehen.
+  const backingRadius = radius * (defaultElevation < 90 ? 0.5 + 0.32 * shape.openness : 0.72);
+  return { radius, backingRadius, defaultElevation, petals, leaves };
 }
 
 /** Weltposition des Pivots eines Blatts (Blütenmitte = Ursprung, Winkel 0 = oben). */

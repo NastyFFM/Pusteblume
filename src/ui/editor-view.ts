@@ -83,7 +83,7 @@ export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
   const SLIDERS: { key: ShapeKey; label: string; format: (v: number) => string }[] = [
     { key: "petals", label: "Blätter", format: (v) => `${Math.round(v)}` },
     { key: "openness", label: "Öffnung", format: (v) => (v < 0.2 ? "Knospe" : v < 0.45 ? "halb offen" : v < 0.75 ? "offen" : "voll erblüht") },
-    { key: "spread", label: "Breite", format: (v) => `${Math.round(v * 100)} %` },
+    { key: "spread", label: "Größe", format: (v) => `${Math.round(v * 100)} %` },
     { key: "twist", label: "Drehung", format: (v) => `${Math.round(v * 100)} %` },
   ];
   const sliderInputs = new Map<ShapeKey, { input: HTMLInputElement; value: HTMLElement }>();
