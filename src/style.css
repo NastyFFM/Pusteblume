@@ -1,14 +1,32 @@
+/* Gestaltung nach dem Figma-Design „Valentines App“ (Rahmen 393×852, Inhalt mit 20 px Rand). */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/instrument-serif-latin.woff2") format("woff2");
+}
+
 :root {
-  --paper: #f7f0e6;
-  --paper-deep: #efe3d2;
-  --ink: #2b2420;
-  --ink-soft: #6f625a;
-  --accent: #a30f2a;
-  --accent-ink: #fff;
-  --line: rgba(43, 36, 32, 0.12);
-  --radius: 18px;
-  --font-display: "Cormorant Garamond", "Georgia", serif;
-  --font-ui: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #ffecef;
+  --brand: #8d1d32;
+  --ink: #000;
+  --step: #ec004f;
+  --meter-track: #ff5363;
+  --box-dark: #ddaeb5;
+  --box-light: #ffccd4;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-quote: "Instrument Serif", "Georgia", serif;
+  --radius-panel: 24px;
+  --pad: 20px;
 }
 
 * { box-sizing: border-box; }
@@ -16,243 +34,182 @@
 html, body { margin: 0; min-height: 100%; }
 body {
   font-family: var(--font-ui);
-  color: var(--ink);
-  background:
-    radial-gradient(120% 80% at 50% -10%, #fffaf3 0%, var(--paper) 55%, var(--paper-deep) 100%);
+  font-weight: 500;
+  color: var(--brand);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
-#app { min-height: 100dvh; display: flex; flex-direction: column; }
+#app { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; }
+h1, h2, p, blockquote, figure { margin: 0; }
+button { font: inherit; color: inherit; }
+img { display: block; }
 
-h1, h2 { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.01em; margin: 0; }
-p { margin: 0; }
-.eyebrow {
-  font-size: 0.78rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); font-weight: 700;
+/* --- Bildschirm (ein Figma-Frame) ---------------------------------------- */
+.screen {
+  position: relative; width: 100%; max-width: 480px; min-height: 100dvh; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 var(--pad) max(36px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  container-type: inline-size;
 }
+.screen > * { position: relative; z-index: 2; }
+.screen__visual { flex: 1 1 auto; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 120px; }
+.screen__actions { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; }
+.screen__actions--center { justify-content: center; }
+.screen__actions--stack { flex-direction: column; align-items: center; gap: 12px; }
 
-/* --- Buttons ---------------------------------------------------------- */
+.head { height: 64px; width: 100%; display: flex; align-items: center; justify-content: center; flex: none; }
+.head__logo { width: 119px; height: 24px; }
+
+.stepper { width: 100%; height: 6px; display: flex; gap: 8px; flex: none; }
+.stepper__seg { flex: 1; border-radius: 16px; background: #fff; }
+.stepper__seg.is-active { background: var(--step); }
+
+.copy { width: 100%; text-align: center; display: grid; gap: 8px; }
+.copy__title { font-size: 18px; font-weight: 700; line-height: 1.6; }
+.copy__text { font-size: 16px; font-weight: 500; line-height: 1.6; text-wrap: balance; }
+
+/* --- Buttons ------------------------------------------------------------- */
 .btn {
-  appearance: none; border: 1px solid transparent; border-radius: 999px; cursor: pointer;
-  font: 600 1rem var(--font-ui); padding: 0.85rem 1.4rem; text-decoration: none; text-align: center;
-  transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease; min-height: 48px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; color: var(--ink);
+  appearance: none; border: 1px solid transparent; border-radius: 160px; cursor: pointer; text-decoration: none;
+  height: 52px; padding: 12px 24px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 16px; font-weight: 500; line-height: 1; white-space: nowrap;
+  transition: transform 0.12s ease, opacity 0.2s ease;
 }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.6; cursor: default; }
-.btn--primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 8px 24px -10px var(--accent); }
-.btn--ghost { background: rgba(255,255,255,0.65); border-color: var(--line); }
-.btn--link { background: none; padding: 0.4rem 0.2rem; min-height: 0; color: var(--ink-soft); font-weight: 600; }
-.row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.row > .btn { flex: 1 1 10rem; }
+.btn--primary { background: var(--brand); color: #fff; }
+.btn--ghost { background: transparent; border-color: var(--brand); color: var(--ink); }
+.btn--icon { width: 52px; padding: 0; background: transparent; border-color: var(--brand); color: var(--brand); flex: none; }
+.btn--wide { padding: 12px 40px; }
+.btn .icon { flex: none; }
 
-/* --- Farbvarianten (Akzent folgt der Rose) ------------------------------ */
-.card--red, .card--red ~ * { --accent: #a30f2a; }
-.card--white { --accent: #8f7a52; }
-.card--yellow { --accent: #b06d00; }
+/* --- Logo-Kachel -------------------------------------------------------- */
+.tile {
+  width: min(340px, 100%); aspect-ratio: 1; border-radius: 24px; display: grid; place-items: center;
+  background: linear-gradient(168deg, #f197a0 20.8%, #dd6b78 73.6%); box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+}
+.tile__logo { width: 61%; height: auto; }
 
-/* --- Editor ------------------------------------------------------------ */
-.editor { width: min(100%, 560px); margin: 0 auto; padding: max(1.25rem, env(safe-area-inset-top)) 1rem 3rem; display: grid; gap: 1.25rem; }
-.editor__head { display: grid; gap: 0.6rem; padding-top: 0.5rem; }
-.editor__title { font-size: clamp(1.9rem, 6vw, 2.6rem); line-height: 1.1; }
-.editor__lead { color: var(--ink-soft); line-height: 1.5; font-size: 0.98rem; }
-.editor__preview {
-  width: min(70vw, 300px); aspect-ratio: 1; margin: 0 auto;
-  filter: drop-shadow(0 18px 24px rgba(60, 20, 20, 0.22));
-  animation: breathe 6s ease-in-out infinite;
-}
-.editor__preview { position: relative; }
-.editor__preview .rose { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
-.editor__form { display: grid; gap: 1.1rem; background: rgba(255,255,255,0.55); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem; }
+/* --- Deko-Blätter am Rand ----------------------------------------------- */
+/* Lage als Figma-Inset (oben rechts unten links in %), Bild bleibt proportional im Kasten. */
+.decor { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.decor__petal { position: absolute; object-fit: contain; }
 
-.field { display: grid; gap: 0.45rem; border: 0; padding: 0; margin: 0; min-width: 0; }
-.field__label { font-weight: 700; font-size: 0.9rem; color: var(--ink); padding: 0; }
-.field__input {
-  width: 100%; font: 1rem var(--font-ui); color: var(--ink); background: #fff; border: 1px solid var(--line);
-  border-radius: 12px; padding: 0.8rem 0.9rem; resize: vertical; line-height: 1.45;
-}
-.field__input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-.field__counter { font-size: 0.78rem; color: var(--ink-soft); text-align: right; }
-.form__error { color: #a30f2a; font-weight: 600; font-size: 0.92rem; }
+/* --- Farbwahl / Nachrichtwahl ------------------------------------------- */
+.hero { position: relative; min-height: 220px; }
+.hero__petal { position: absolute; width: 56%; max-width: 230px; height: auto; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.hero__petal--left { left: -5%; width: 50%; transform: translate(-50%, -50%) rotate(-8deg); }
+.hero__petal--right { left: 105%; width: 50%; transform: translate(-50%, -50%) rotate(12deg); }
+.hero__petal--main { transition: opacity 0.25s ease; }
 
-.swatches { display: flex; gap: 0.75rem; }
-.swatch {
-  flex: 1; height: 64px; border-radius: 14px; border: 2px solid transparent; cursor: pointer; position: relative;
-  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0.4rem; transition: transform 0.15s ease, border-color 0.15s ease;
-}
-.swatch--red { background: radial-gradient(circle at 35% 30%, #ef5a74, #a30f2a 70%); }
-.swatch--white { background: radial-gradient(circle at 35% 30%, #ffffff, #dccfb5 75%); }
-.swatch--yellow { background: radial-gradient(circle at 35% 30%, #ffde6b, #dc9400 75%); }
-.swatch.is-active { border-color: var(--ink); transform: translateY(-2px); }
-.swatch__label { font-size: 0.78rem; font-weight: 700; color: rgba(0,0,0,0.65); background: rgba(255,255,255,0.75); border-radius: 999px; padding: 0.1rem 0.55rem; }
+.choice { width: 100%; display: grid; gap: 15px; justify-items: center; margin-top: 28px; }
+.choice__row { display: flex; gap: 16px; align-items: center; }
+.choice__label { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.2; }
 
-.slider { display: grid; grid-template-columns: 5.2rem 1fr 6.5rem; align-items: center; gap: 0.6rem; font-size: 0.9rem; }
-.slider__label { font-weight: 600; }
-.slider__value { text-align: right; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.slider__input { width: 100%; accent-color: var(--accent); min-height: 32px; }
-
-.result { display: grid; gap: 0.7rem; border-top: 1px solid var(--line); padding-top: 1rem; }
-.result__title { font-size: 1.5rem; }
-.result__link { display: block; word-break: break-all; font-weight: 700; color: var(--accent); background: #fff; padding: 0.7rem 0.9rem; border-radius: 12px; border: 1px dashed var(--line); }
-
-/* --- Umgebung (Panorama hinter der Bühne) ---------------------------------- */
-.environment {
-  position: absolute; inset: 0; overflow: hidden; z-index: -1; pointer-events: none;
+.swatch, .option {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; position: relative; flex: none;
+  transition: transform 0.15s ease;
 }
-.environment__strip {
-  position: absolute; left: 0; top: 0;
-  height: 150vh; width: 900vh; /* drei Kacheln à 300vh (Bild ist 2:1) */
-  background-repeat: repeat-x; background-size: auto 100%;
-  will-change: transform;
-}
-/* leichter warmer Schleier, damit Text und Bedienelemente lesbar bleiben */
-.environment::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(250, 244, 236, 0.18), rgba(247, 240, 230, 0.32));
-}
-html[data-fx~="off"] .environment { display: none !important; }
-
-/* --- Karte ------------------------------------------------------------- */
-.card {
-  isolation: isolate;
-  flex: 1; display: grid; grid-template-rows: auto 1fr auto auto auto; align-items: center; justify-items: center;
-  gap: 0.75rem; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom)); position: relative; min-height: 100dvh;
-  touch-action: none;
-}
-.card__back { justify-self: start; position: relative; z-index: 3; }
-.card__stage {
-  --size: min(92vw, 62dvh, 520px);
-  width: var(--size); aspect-ratio: 1; position: relative; display: grid; place-items: center;
-}
-.card__stage .rose:not(.rose--back) { z-index: 2; }
-.card__stage .rose {
-  position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;
-  filter: drop-shadow(0 20px 26px rgba(60, 20, 20, 0.28));
-  /* Atmen: kaum sichtbares Pulsieren. Liegt auf dem SVG-Element, die Blätter transformieren innen. */
-  animation: breathe 6s ease-in-out infinite;
-  transform-origin: 50% 50%;
-}
-.rose--back { filter: drop-shadow(0 6px 10px rgba(20, 40, 20, 0.25)) !important; transition: opacity 0.8s ease, transform 0.9s ease; }
-.card--revealed .rose--back { opacity: 0.55; transform: scale(1.08); animation: none; }
-
-/* Vignette: Ecken der Ansicht leicht abdunkeln, lenkt den Blick auf die Blüte. Liegt unter Overlay und Zurück-Button. */
-.card::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1;
-  background: radial-gradient(ellipse 78% 62% at 50% 44%, rgba(60, 30, 20, 0) 0%, rgba(60, 30, 20, 0) 58%, rgba(60, 30, 20, 0.18) 100%);
+.swatch { background: var(--swatch); }
+.swatch--white, .swatch--rosa { box-shadow: inset 0 0 0 1px #b5b5b5; }
+.option { background: #fff; color: var(--brand); font-size: 16px; font-weight: 500; }
+.option.is-active { font-weight: 700; }
+.swatch.is-active::after, .option.is-active::after {
+  content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--ink);
 }
 
-/* Schlagschatten auf dem Untergrund: weiche Ellipse, Form und Versatz folgen der Kamera (per Frame nur transform/opacity). */
-.stage-shadow {
-  position: absolute; left: 50%; top: 50%; border-radius: 50%; pointer-events: none; will-change: transform, opacity;
-  background: radial-gradient(closest-side, rgba(70, 30, 25, 0.38) 0%, rgba(70, 30, 25, 0.22) 42%, rgba(70, 30, 25, 0.07) 76%, rgba(70, 30, 25, 0) 100%);
-  transition: opacity 0.5s ease;
+/* --- Zitatkarte --------------------------------------------------------- */
+.quote { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+/* Lage wie im Figma: Bild 668 px breit bei 393 px Rahmen (170 %), um 195 px nach oben versetzt. */
+.quote__paper {
+  position: absolute; inset: 0; opacity: 0.5;
+  background: url("/design/paper.webp") 50% -49.6cqw / 170% auto no-repeat;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0) 2%, #000 14%, #000 58%, rgba(0,0,0,0) 72%);
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0) 2%, #000 14%, #000 58%, rgba(0,0,0,0) 72%);
 }
+.quote__body {
+  position: absolute; left: var(--pad); right: var(--pad); top: 22%; text-align: center; display: grid; gap: 14px; justify-items: center;
+}
+.quote__text { font-family: var(--font-quote); font-weight: 400; font-size: clamp(26px, 8.2vw, 32px); line-height: 1.3; color: var(--ink); max-width: 300px; text-wrap: balance; }
+.quote__author { font-size: 14px; font-weight: 500; color: var(--brand); line-height: 1.6; }
 
-/* Pollen: winzige helle Körnchen, die langsam durch die Bühne treiben. Beim Pusten (--blow > 0.3) driftet die ganze Ebene nach oben/außen.
-   z-index 2 wie die Blüte (liegt per DOM-Reihenfolge darüber), aber unter Overlay und Zurück-Button. */
-.motes {
-  position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: visible;
-  --gust: calc(max(0, var(--blow, 0) - 0.3) / 0.7);
-  transform: translateY(calc(var(--gust) * -9%)) scale(calc(1 + var(--gust) * 0.22));
-  transition: transform 0.45s ease-out;
+/* Nachricht-Schritt: Karte liegt als Hintergrund, der Inhalt unten bekommt einen weichen Übergang */
+.screen--quote .screen__visual { min-height: 44dvh; }
+.screen--quote .copy::before {
+  content: ""; position: absolute; left: calc(-1 * var(--pad)); right: calc(-1 * var(--pad)); top: -60px; bottom: -200px; z-index: -1;
+  background: linear-gradient(180deg, rgba(255, 236, 239, 0) 0%, var(--bg) 60px, var(--bg) 100%);
 }
-/* Nach dem Öffnen hinter die Botschaft, damit keine Körnchen über dem Text schweben. */
-.card--revealed .motes { z-index: 0; }
-.mote {
-  position: absolute; border-radius: 50%; opacity: 0;
-  background: radial-gradient(circle, rgba(255, 250, 235, 0.95) 0%, rgba(255, 240, 210, 0.6) 45%, rgba(255, 235, 200, 0) 100%);
-  animation: mote-drift var(--dur, 12s) ease-in-out var(--delay, 0s) infinite;
-}
+.screen--quote .copy { position: relative; }
+.screen--quote .decor { z-index: 1; }
 
-/* Lichtpunkte: warmer Schein, wo sich ein Blatt löst. Pool fester Elemente, Position per transform, Aufblühen auf dem inneren Element. */
-.glows { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: visible; }
-.glow { position: absolute; left: 50%; top: 50%; }
-.glow__light {
-  width: 100%; height: 100%; border-radius: 50%; opacity: 0; will-change: transform, opacity;
-  background: radial-gradient(circle, rgba(255, 236, 190, 0.95) 0%, rgba(255, 200, 130, 0.55) 35%, rgba(255, 180, 110, 0) 70%);
-}
-.glow__light.is-lit { animation: glow-pop 0.52s ease-out; }
+/* Gestreute Blätter (Foto) in zwei Ecken, wie im Design hinter der Karte */
+.stage__corner { position: absolute; width: 140%; aspect-ratio: 4096 / 2731; background: var(--corner, url("/design/bed-rosa.webp")) center / contain no-repeat; pointer-events: none; z-index: 0; opacity: 0.9; }
+.stage__corner--tl { left: -72%; top: -22%; }
+.stage__corner--br { left: 70%; top: 32%; transform: rotate(14deg); width: 122%; }
+.stage--red .stage__corner, .screen--quote .stage__corner { --corner: url("/design/bed-rosa.webp"); }
+.stage--red .stage__corner { --corner: url("/design/bed-red.webp"); }
+.stage--white .stage__corner { --corner: url("/design/bed-white.webp"); }
+.stage--beige .stage__corner { --corner: url("/design/bed-beige.webp"); }
+.stage--grey .stage__corner { --corner: url("/design/bed-grey.webp"); }
 
-.card__message {
-  width: calc(var(--rose-scale, 0.85) * 68%); position: relative; z-index: 1; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; text-align: center;
-  padding: 1.1rem; background: #fffdf8; color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--line), 0 10px 30px -14px rgba(0,0,0,0.3);
-  font-family: var(--font-display); line-height: 1.25; transition: width 0.9s cubic-bezier(.2,.8,.2,1), aspect-ratio 0.9s ease, border-radius 0.9s ease, padding 0.9s ease;
-  overflow: hidden;
-}
-.card__text { white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 500; }
-.card__from { margin-top: 0.6rem; font-style: italic; color: var(--ink-soft); font-size: 0.8em; }
-.msg--xl .card__text { font-size: clamp(1.4rem, 7vw, 2.1rem); }
-.msg--l  .card__text { font-size: clamp(1.15rem, 5.4vw, 1.6rem); }
-.msg--m  .card__text { font-size: clamp(1rem, 4.4vw, 1.3rem); }
-.msg--s  .card__text { font-size: clamp(0.82rem, 3.6vw, 1.05rem); }
+/* --- Bühne (Schachtel mit Blütenbett) ------------------------------------ */
+.screen--stage { padding: 0; justify-content: flex-start; }
+.screen--stage .head { z-index: 3; }
+.screen--stage .stepper { z-index: 3; margin: 0 var(--pad); width: calc(100% - 2 * var(--pad)); }
+.stage { position: absolute; inset: 0; overflow: hidden; z-index: 1; touch-action: none; user-select: none; -webkit-user-select: none; }
+.stage .quote { z-index: 1; }
+/* Das Bett liegt innerhalb der Tiefenkanten; Blätter am Rand ragen natürlich darüber hinaus. */
+.stage__bed { position: absolute; inset: 48px 36px; z-index: 3; container-type: inline-size; will-change: transform; }
 
-/* Schrägansicht: Die Botschaft liegt unter der Blüte und erscheint erst, wenn das letzte Blatt fällt. */
-.card--3d .card__message { width: calc(var(--rose-scale, 0.85) * 59%); opacity: 0; transition: opacity 0.9s ease, width 0.9s cubic-bezier(.2,.8,.2,1), aspect-ratio 0.9s ease, border-radius 0.9s ease, padding 0.9s ease; }
-.card--3d.card--revealed .card__message { opacity: 1; }
-.card--revealed .card__message { width: 100%; aspect-ratio: auto; border-radius: var(--radius); padding: 1.6rem 1.4rem; }
-/* Aufglühen beim Freilegen: warmer Schein außen (box-shadow, einmalig) und innen (Overlay-Opazität), danach wieder normal. */
-.card__message::after {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
-  background: radial-gradient(circle at 50% 40%, rgba(255, 226, 170, 0.75) 0%, rgba(255, 210, 150, 0.3) 45%, rgba(255, 200, 140, 0) 75%);
-}
-.card__message.is-glowing { animation: message-glow 1.2s ease-out; }
-.card__message.is-glowing::after { animation: message-glow-inner 1.2s ease-out; }
-.card--revealed .card__stage .rose { pointer-events: none; }
+/* Tiefenkanten der Schachtel: Seiten 36 px, oben/unten 48 px als Trapez (Verlauf wie im Figma) */
+.box { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.box > i { position: absolute; display: block; }
+.box__l { left: 0; top: 0; bottom: 0; width: 36px; background: linear-gradient(90deg, var(--box-light), var(--box-dark)); }
+.box__r { right: 0; top: 0; bottom: 0; width: 36px; background: linear-gradient(270deg, var(--box-light), var(--box-dark)); }
+.box__t { left: 0; right: 0; top: 0; height: 48px; background: linear-gradient(180deg, var(--box-light), var(--box-dark)); clip-path: polygon(0 0, 100% 0, calc(100% - 36px) 100%, 36px 100%); }
+.box__b { left: 0; right: 0; bottom: 0; height: 48px; background: linear-gradient(0deg, var(--box-light), var(--box-dark)); clip-path: polygon(36px 0, calc(100% - 36px) 0, 100% 100%, 0 100%); }
 
-.card__hint { color: var(--ink-soft); font-size: 0.95rem; min-height: 1.4em; text-align: center; }
-.meter { width: min(60vw, 260px); height: 6px; border-radius: 999px; background: rgba(0,0,0,0.08); overflow: hidden; }
-.meter__fill { height: 100%; width: 100%; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, #9cc77f, var(--accent)); transition: transform 0.08s linear; }
-.card--revealed .meter, .card--revealed .card__hint { visibility: hidden; }
-.card__done { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; animation: rise 0.8s ease-out both; }
+.bed { position: absolute; inset: 0; }
+.bed__petal {
+  position: absolute; height: auto; pointer-events: none; will-change: transform, opacity; transform-origin: 50% 50%;
+  filter: drop-shadow(0 6px 8px rgba(120, 30, 40, 0.18));
+}
+/* Schatten pro Blatt ist ein statischer Filter; auf schwachen Geräten über ?fx=off abschaltbar. */
+html[data-fx~="off"] .bed__petal { filter: none; }
 
-/* --- Overlay ----------------------------------------------------------- */
-.overlay {
-  position: absolute; inset: 0; display: grid; place-items: center; padding: 1rem;
-  background: rgba(247, 240, 230, 0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2;
+/* --- Panel -------------------------------------------------------------- */
+.panel {
+  position: absolute; left: var(--pad); right: var(--pad); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 4;
+  background: rgba(255, 255, 255, 0.8); border-radius: var(--radius-panel); padding: 20px;
+  display: grid; gap: 16px; justify-items: center; text-align: center;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  animation: rise 0.5s ease-out both;
 }
-.overlay__box {
-  width: min(100%, 420px); display: grid; gap: 0.8rem; text-align: center; background: rgba(255,255,255,0.9);
-  border: 1px solid var(--line); border-radius: 24px; padding: 1.6rem 1.3rem; box-shadow: 0 30px 60px -30px rgba(0,0,0,0.35);
-}
-.overlay__eyebrow { font-size: 0.8rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; }
-.overlay__title { font-size: 2.1rem; line-height: 1.05; }
-.overlay__text { color: var(--ink-soft); line-height: 1.5; }
-.overlay__error { color: #a30f2a; font-weight: 600; font-size: 0.9rem; }
+html[data-fx~="off"] .panel { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(255, 255, 255, 0.92); }
+.panel.is-leaving { animation: sink 0.6s ease-in both; }
+.panel__title { font-size: 18px; font-weight: 700; line-height: 1.6; }
+.panel__text { font-size: 16px; font-weight: 500; line-height: 1.6; text-wrap: balance; }
+.panel__actions { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.panel__actions .btn:only-child { margin-left: auto; }
 
-/* --- Hinweise ---------------------------------------------------------- */
-.notice { margin: auto; width: min(100%, 460px); padding: 2rem 1.25rem; display: grid; gap: 0.9rem; text-align: center; justify-items: center; }
-.notice__title { font-size: 2.2rem; }
-.notice__text { color: var(--ink-soft); line-height: 1.5; }
+.meter { width: 120px; height: 8px; border-radius: 60px; background: var(--meter-track); overflow: hidden; }
+.meter__fill { display: block; height: 100%; width: 100%; border-radius: 60px; background: var(--brand); transform: scaleX(0); transform-origin: left; transition: transform 0.15s linear; }
 
-/* --- Animationen ------------------------------------------------------- */
-@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.015); } }
-@keyframes message-glow {
-  0% { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 0 rgba(255, 214, 150, 0), 0 10px 30px -14px rgba(0,0,0,0.3); }
-  30% { box-shadow: inset 0 0 0 1px var(--line), 0 0 42px 10px rgba(255, 214, 150, 0.65), 0 10px 30px -14px rgba(0,0,0,0.3); }
-  100% { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 0 rgba(255, 214, 150, 0), 0 10px 30px -14px rgba(0,0,0,0.3); }
-}
-@keyframes message-glow-inner { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes glow-pop { 0% { transform: scale(0.35); opacity: 0; } 35% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.35); opacity: 0; } }
-@keyframes mote-drift {
-  0% { transform: translate(0, 0); opacity: 0; }
-  15% { opacity: var(--alpha, 0.4); }
-  50% { transform: translate(var(--dx, 0px), var(--dy, -20px)); }
-  85% { opacity: var(--alpha, 0.4); }
-  100% { transform: translate(0, 0); opacity: 0; }
-}
+/* --- Versenden ---------------------------------------------------------- */
+.send-ready { width: 176px; height: auto; }
+.link-fallback { width: 100%; margin-top: 12px; font-size: 13px; word-break: break-all; text-align: center; background: #fff; border-radius: 12px; padding: 10px 12px; }
+
+/* --- Animationen -------------------------------------------------------- */
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes sink { to { opacity: 0; transform: translateY(12px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .editor__preview, .card__stage .rose, .mote { animation: none; }
-  .mote { opacity: var(--alpha, 0.4); }
-  .motes { transition: none; transform: none; }
+  .panel, .panel.is-leaving { animation: none; }
 }
 
-/* ?fx=off: auch Bühneneffekte aus, zum Eingrenzen von Darstellungsproblemen */
-html[data-fx~="off"] .stage-shadow,
-html[data-fx~="off"] .motes,
-html[data-fx~="off"] .glow,
-html[data-fx~="off"] .card::after { display: none !important; }
-html[data-fx~="off"] .card__stage .rose,
-html[data-fx~="off"] .editor__preview { animation: none !important; }
-html[data-fx~="off"] .card__stage .rose { filter: none !important; }
+/* Breite Bildschirme: Rahmen wie ein Handy mittig, Rest bleibt rosa. */
+@media (min-width: 540px) {
+  .screen { min-height: 100dvh; box-shadow: 0 0 0 1px rgba(141, 29, 50, 0.08); }
+}

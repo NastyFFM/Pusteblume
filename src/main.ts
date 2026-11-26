@@ -1,28 +1,24 @@
-import type { CardData } from "../shared/card";
 import { h } from "./dom";
 import { decodeCard } from "../shared/link";
 import { mountCardView } from "./ui/card-view";
-import { mountEditorView } from "./ui/editor-view";
-import { loadAtlas } from "./rose/sprite-model";
-import { FX } from "./rose/svg-renderer";
-import type { RoseStyle } from "./rose/factory";
+import { DEFAULT_DRAFT, EDITOR_PATHS, mountEditorView, type EditorDraft, type EditorStep } from "./ui/editor-view";
 
 const app = document.getElementById("app")!;
-const PREVIEW_KEY = "pusteblume:preview";
 const DRAFT_KEY = "pusteblume:draft";
 
-function readJson<T>(key: string): T | null {
+function readDraft(): EditorDraft {
   try {
-    const raw = sessionStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : null;
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    return raw ? { ...DEFAULT_DRAFT, ...(JSON.parse(raw) as Partial<EditorDraft>) } : { ...DEFAULT_DRAFT };
   } catch {
-    return null;
+    return { ...DEFAULT_DRAFT };
   }
 }
 
-function writeJson(key: string, value: unknown) {
+function writeDraft(draft: EditorDraft | null) {
   try {
-    sessionStorage.setItem(key, JSON.stringify(value));
+    if (draft) sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    else sessionStorage.removeItem(DRAFT_KEY);
   } catch {
     // Speicher nicht verfügbar (z. B. privater Modus): Entwurf geht dann beim Neuladen verloren.
   }
@@ -30,73 +26,26 @@ function writeJson(key: string, value: unknown) {
 
 let activeView: { destroy(): void } | null = null;
 
-// ?fx=filters schaltet SVG-Filter ein (flackern auf manchen Handys); noshade,nosort | off schalten weitere Effekte ab
-{
-  const fx = new Set((new URLSearchParams(location.search).get("fx") ?? "").split(",").map((t) => t.trim()).filter(Boolean));
-  const off = fx.has("off");
-  FX.lite = off || !fx.has("filters");
-  FX.shade = !(off || fx.has("noshade"));
-  FX.resortDegrees = off || fx.has("nosort") ? Infinity : fx.has("sortalways") ? 0 : 30;
-  document.documentElement.dataset.fx = [...fx].join(" ");
+// ?fx=off schaltet Hintergrund-Unschärfe des Panels ab (zum Eingrenzen von Darstellungsproblemen am Handy)
+document.documentElement.dataset.fx = new URLSearchParams(location.search).get("fx") ?? "";
+
+/** Interne Navigation; der Query-String (z. B. ?fx=off) bleibt erhalten. */
+function navigate(path: string) {
+  history.pushState({}, "", path + location.search);
+  void route();
 }
 
-/** Standard-Atlas; ?rose=<name> wählt einen anderen, ?rose=svg die gezeichnete Rose. */
-const DEFAULT_ROSE = "rose2";
-
-/** Rosen-Darstellung aus der URL. Fällt auf SVG zurück, wenn der Atlas nicht lädt. */
-let roseStyle: RoseStyle = { kind: "svg" };
-let roseStyleLoaded: Promise<void> | null = null;
-
-function ensureRoseStyle(): Promise<void> {
-  roseStyleLoaded ??= (async () => {
-    const name = new URLSearchParams(location.search).get("rose") ?? DEFAULT_ROSE;
-    if (name === "svg" || !/^[a-z0-9-]+$/i.test(name)) return;
-    try {
-      const { atlas, baseUrl } = await loadAtlas(name);
-      roseStyle = { kind: "sprite", atlas, baseUrl };
-    } catch (e) {
-      console.warn("Sprite-Atlas konnte nicht geladen werden, nutze SVG-Rose.", e);
-    }
-  })();
-  return roseStyleLoaded;
-}
-
-/** Hängt den ?rose-Parameter an interne Navigationen an, damit die Darstellung erhalten bleibt. */
-function withStyle(path: string): string {
-  return path + location.search;
-}
-
-function showEditor() {
+function showEditor(step: EditorStep) {
   activeView?.destroy();
-  activeView = null;
-  document.title = "Pusteblume · Interaktive Grußkarte";
-  mountEditorView(app, {
-    style: roseStyle,
-    // Entwurf wiederherstellen: nach Vorschau, Zurück-Navigation oder Neuladen.
-    initial: readJson<Partial<CardData>>(DRAFT_KEY) ?? undefined,
-    onChange(draft) {
-      writeJson(DRAFT_KEY, draft);
+  document.title = "Valentins-Nachricht erstellen";
+  activeView = mountEditorView(app, {
+    step,
+    draft: readDraft(),
+    onChange: writeDraft,
+    go(next) {
+      if (next === "start" && step === "send") writeDraft(null);
+      navigate(EDITOR_PATHS[next]);
     },
-    onPreview(card) {
-      writeJson(PREVIEW_KEY, card);
-      history.pushState({}, "", withStyle("/preview"));
-      void route();
-    },
-  });
-}
-
-function showCard(card: CardData, opts?: { preview?: boolean }) {
-  activeView?.destroy();
-  document.title = "Eine Rose für dich 🌹";
-  activeView = mountCardView(app, card, {
-    style: roseStyle,
-    onBack: opts?.preview
-      ? () => {
-          history.pushState({}, "", withStyle("/"));
-          void route();
-        }
-      : undefined,
-    backLabel: "← Zurück zum Editor",
   });
 }
 
@@ -104,33 +53,29 @@ function showError(text: string) {
   activeView?.destroy();
   activeView = null;
   app.replaceChildren(
-    h("section", { class: "notice" },
-      h("p", { class: "eyebrow" }, "Pusteblume"),
-      h("h1", { class: "notice__title" }, "Hoppla"),
-      h("p", { class: "notice__text" }, text),
-      h("a", { class: "btn btn--primary", href: "/" }, "Eigene Karte erstellen"),
+    h("section", { class: "screen screen--start" },
+      h("div", { class: "screen__visual" }),
+      h("div", { class: "copy" }, h("h1", { class: "copy__title" }, "Hoppla"), h("p", { class: "copy__text" }, text)),
+      h("div", { class: "screen__actions screen__actions--center" }, h("a", { class: "btn btn--primary btn--wide", href: "/" }, h("span", { class: "btn__label" }, "Eigene Nachricht erstellen"))),
     ),
   );
 }
 
 async function route() {
-  await ensureRoseStyle();
   const path = location.pathname.replace(/\/+$/, "") || "/";
 
-  if (path === "/") return showEditor();
-
-  if (path === "/preview") {
-    const card = readJson<CardData>(PREVIEW_KEY);
-    if (!card) return showEditor();
-    return showCard(card, { preview: true });
-  }
+  const step = (Object.keys(EDITOR_PATHS) as EditorStep[]).find((s) => EDITOR_PATHS[s] === path);
+  if (step) return showEditor(step);
 
   // Frontend-Link: Karte steckt vollständig in der URL.
   const encoded = /^\/v\/([^/]+)$/.exec(path);
   if (encoded) {
     const card = decodeCard(encoded[1]!);
     if (!card) return showError("Dieser Link ist unvollständig oder beschädigt.");
-    return showCard(card);
+    activeView?.destroy();
+    document.title = "Jemand hat an dich gedacht 🌹";
+    activeView = mountCardView(app, card, { onCreateOwn: () => navigate("/") });
+    return;
   }
 
   showError("Diese Seite gibt es nicht.");

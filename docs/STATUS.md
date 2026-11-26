@@ -1,47 +1,51 @@
 # Stand der Entwicklung (Übergabe)
 
-Stand: 26.11.2026, `main` = Arbeits-Branch `ccr-05c34b09-hc5huy`, letzter Commit siehe `git log`.
+Stand: 26.11.2026, `main` = Arbeits-Branch `ccr-a20fd12f-atnpsc`, letzter Commit siehe `git log`.
 Production bei Vercel: Projekt `pusteblume` (Team nastyffms-projects), vermutlich https://pusteblume.vercel.app.
 
+## Umbau nach Figma („Valentines App“)
+Figma-Datei (Kopie mit Bearbeitungsrecht, nur so liest der Figma-MCP-Server):
+https://www.figma.com/design/98e6V6PYJrPQxvCkUnI628/Valentines-App--Copy- (Seite „Layout Sketch“, Abschnitt „Version 1 – Schachtel mit Botschaft“).
+Das Original (`9zisSSkNkxXd1enrPCqOzc`) gehört einem anderen Team; „Anyone can edit“ reicht dem MCP nicht.
+
+Die App folgt jetzt dem Design: statt einer Rose liegt ein **Bett aus losen Rosenblättern in einer Schachtel** über einer
+Zitatkarte. Zwei Flows, alle Bildschirme 1:1 aus dem Figma:
+- **Ersteller** (`/` → `/farbe` → `/nachricht` → `/probieren` → `/versenden`): Start mit Logo-Kachel, Farbe (5 Kreise:
+  Rot, Weiß, Rosa, Beige, Grau), Nachricht (5 Zitat-Vorlagen, Autor), Probieren (selbst pusten, dann „Fertig“),
+  Versenden („Link kopieren“ + Teilen-Menü, „Neue Nachricht erstellen“). Entwurf in sessionStorage.
+- **Empfänger** (`/v/<kodiert>`): „Jemand hat an dich gedacht!“ → Pusten (Panel mit Fortschritt) → Botschaft frei →
+  „Wunderschön!“ mit „Eigene Nachricht erstellen“.
+
 ## Was fertig ist
-1. **Editor** (`/`): Farbe (rot/weiß/gelb), Botschaft, Absender, Blütenform (Blätter 5–110, Öffnung
-   geschlossen→offen, Größe 30–140 %, Drehung), Live-Vorschau, Link erstellen/kopieren/teilen.
-   Entwurf überlebt Vorschau/Zurück/Neuladen (sessionStorage).
-2. **Karte** (`/v/<kodiert>`): Karte steckt komplett im Link (base64url-JSON, `shared/link.ts`), kein Server.
-   Intro-Overlay → Mikrofon (Web Audio, kalibrierter Grundpegel) oder Wischen/Leertaste. Pust-Intensität
-   steuert Freigabe-Tempo und Abflug. Botschaft erscheint, wenn das letzte Blatt fällt; „Noch einmal“.
-3. **Rose**: Sprite-Atlas aus zwei ChatGPT-Sheets (`public/rose/rose2`, Standard; `rose1` nur Außenblätter;
-   `demo` synthetisch). `?rose=svg` = prozedurale SVG-Rose (Draufsicht). Fehlender Atlas → SVG-Rückfall.
-4. **Pipeline** `tools/build-atlas.ts`: Freistellen, Blob-Detection, Pivot über helle Blattbasis
-   (Rückfall Formanalyse), Atlas packen, Farbvarianten, `--scale`. Tests gegen Fixture und beide KI-Sheets.
-   Neues Sheet: Prompt in `tools/generate-petals.ts`, dann `npm run atlas -- a.png b.png name --scale 0.7`.
-5. **Pseudo-3D** (`src/rose/projection.ts`): Blätter als Flächen im Raum, Dreiviertel-Kamera (48°),
-   Tiefensortierung. Kamera folgt Handy-Neigung (oben/Seite) und Kompassdrehung (360°), Maus am Desktop.
-6. **Stiel + Kelchblätter** statt Blätter; Umgebung = weichgezeichnetes Panorama (`public/env/room.jpg`,
-   `tools/make-env.cjs`), wandert mit der Kamera.
-7. **Effekte**: Licht/Schatten pro Blatt (Blend-Kopien), Helligkeits-Tiefenstufen, Innenschatten,
-   Bodenschatten, Vignette, Atmen, Pollen, Glow beim Lösen/Öffnen, Trudeln. SVG-Filter (Blur) sind
-   **standardmäßig aus** (`?fx=filters` an), Tiefensortierung nur alle 30° (`?fx=nosort`/`sortalways`),
-   `?fx=noshade`, `?fx=off`. Grund: Flackern auf dem Handy des Kunden (Filter und DOM-Umhängen).
+1. **Design-Assets** (`public/design`): Logo (SVG), Blätter a/b/c und Blätterhaufen je Farbe als WebP (eingefärbt per
+   `tools/make-design-assets.cjs`, Quellen in `tools/design-src`), Papierstruktur. Schriften Inter (500/700) und
+   Instrument Serif selbst gehostet (`public/fonts`). Icons als Inline-SVG in `src/ui/kit.ts`.
+2. **Datenmodell** (`shared/card.ts`): `CARD_COLORS` (red/white/rosa/beige/grey), `QUOTES` (5 gemeinfreie Zitate),
+   Link-Feld `q` (Vorlagen-Index, Link ~30 Zeichen). Alte Links (`m`, `f`, `s`, Farbe `yellow`) werden weiter gelesen.
+3. **Blütenbett** (`src/petals/bed.ts`): 108 Blatt-Sprites in zwei Lagen auf Jitter-Raster, Blätter in der Mitte lösen sich
+   zuletzt. Physik unverändert `RosePhysics` (nimmt jetzt `Pick<RoseModel, "petals">`). Pro Frame nur transform/opacity.
+4. **Bühne** (`src/ui/blow-stage.ts`): Zitatkarte (Papier + Instrument Serif) → Tiefenkanten der Schachtel (CSS-Verläufe)
+   → Bett. Mikrofon aus der Nutzergeste, Rückfall Wischen, Leertaste; Handy-Neigung/Maus = leichte Parallaxe des Betts.
+5. **Bildschirm-Bausteine** (`src/ui/kit.ts`): Header, Stepper, Buttons, Panel (Backdrop-Blur, über `?fx=off` abschaltbar),
+   Meter, Logo-Kachel, Zitatkarte, Deko-Blätter (Lagen aus den Figma-Insets), Farbkreise.
 
 ## Entscheidungen
-- Kein Backend (Kurzlinks mit Upstash gab es bis Commit `e69aa2e`, entfernt wegen Function-Crash auf Vercel;
-  Ursache war tsconfig/ESM, inzwischen bekannt → bei Bedarf reaktivierbar).
-- Kein WebGL; alles SVG/CSS, GPU-freundlich (Transforms/Opacity), keine Filter pro Frame.
-- Atlanten als PNG (~700 KB je Farbe); WebP wäre der nächste Schritt für die Ladezeit.
+- Rosen-Code (`src/rose/model.ts`, `svg-renderer.ts`, `projection.ts`, `sprite-model.ts`, `src/view/*`, Atlas-Pipeline)
+  bleibt im Repo und kompiliert, wird aber von der UI nicht mehr benutzt. Die Atlanten unter `public/rose` und
+  `public/env/room.jpg` werden noch mit deployt (nicht geladen). Bei Bedarf entfernen oder als `?mode=rose` reaktivieren.
+- Nur Vorlagen-Zitate wie im Design; freier Text ist im Modell weiterhin erlaubt (alte Links), hat aber keine UI.
+- Das Logo im Design ist die Marke des Kunden (Pandora); Mandantenfähigkeit (Logo/Farben je Laden) steht weiter aus.
+- Kein Backend, kein WebGL, keine SVG-Filter. Einziger Filter: statischer drop-shadow je Blatt (`?fx=off` schaltet ab).
 
 ## Offene Punkte / Ideen
-- Am echten Handy nach jedem Effekt-Umbau gegenprüfen (Flackern). iOS: mix-blend-mode auf SVG-image ungetestet.
-- Bewegungsunschärfe ohne Filter (Nachzieh-Kopie) nachbauen, falls gewünscht.
-- Pust-Empfindlichkeit und Neigungs-Empfindlichkeit am Gerät feinjustieren (`src/blow/detector.ts`, `src/view/tilt.ts`).
-- Drittes Blätter-Sheet (Innenblätter schräg von oben) würde die Mitte dichter machen.
-- Produktvision Blumenladen: Mandanten pro Laden (Logo/Farben/Domain), Gutschein mit Code + Einlösen an der
-  Kasse, QR-Kärtchen am Strauß, Statistik; dafür Backend (Vercel + Postgres/Supabase) nötig. Priorität nach Pilotladen.
+- **Am echten Handy prüfen**: Flackern (108 Bilder mit drop-shadow, Panel mit backdrop-filter), Mikrofon-Empfindlichkeit,
+  Parallaxe-Stärke (`PARALLAX` in `blow-stage.ts`). Bei Problemen zuerst `?fx=off` testen.
+- Figma-Feinheiten: Deko-Blätter sind überall Variante a; Figma nutzt pro Bildschirm leicht andere Lagen. Rosenbett im
+  Design ist ein Foto-Cluster in 10 Instanzen; wir decken mit Einzel-Sprites ab (fliegen weg) plus Cluster in zwei Ecken.
+- Tiefeneindruck der Schachtel („Device = Schachtel“, Figma-Notiz): bisher nur die Kanten und die Parallaxe.
+- Zitate ggf. mit dem Kunden abstimmen; die fünf Texte stehen in `shared/card.ts` (`QUOTES`).
+- Produktvision Blumenladen (Mandanten, Gutschein, QR, Statistik) wie bisher: braucht Backend, Priorität nach Pilotladen.
 
-## Nächster Schritt (gewünscht)
-Figma anbinden: Connector unter https://claude.ai/customize/connectors verbinden, neue Session starten,
-dann Layouts (Editor, Karte, Gutschein-Bildschirm) aus Figma übernehmen.
-
-## Nützliche Skripte (Scratchpad der alten Session, nicht im Repo)
-Playwright-Abläufe für Editor→Karte→Pusten, Shape-Extreme, Kamerawinkel, Kompassdrehung; leicht aus den
-Debug-Haken neu zu schreiben (siehe CLAUDE.md).
+## Prüfen
+`npm run typecheck && npm test && npm run build`, Screens mit Playwright (siehe CLAUDE.md). Letzte Prüfung: alle
+Bildschirme 393×852 ohne Konsolenfehler, Pusten per Debug-Haken legt die Botschaft frei.

@@ -1,197 +1,256 @@
-import { DEFAULT_SHAPE, LIMITS, ROSE_COLORS, SHAPE_LIMITS, normalizeShape, validateCard, type CardData, type RoseColor, type RoseShape } from "../../shared/card";
+import { CARD_COLORS, COLOR_INFO, QUOTES, validateCard, type CardColor, type CardData } from "../../shared/card";
 import { createCardLink } from "../api";
 import { h } from "../dom";
-import { createRose, type RoseStyle } from "../rose/factory";
+import { petalImage } from "../petals/bed";
+import { BlowStage } from "./blow-stage";
+import { backButton, button, colorSwatch, copy, decor, header, logoTile, meter, panel, sendReadyIcon, stepper } from "./kit";
 
-const COLOR_LABELS: Record<RoseColor, string> = { red: "Rot", white: "Weiß", yellow: "Gelb" };
+/**
+ * Ersteller-Flow nach Figma: Start → Farbe → Nachricht → Probieren → Versenden.
+ * Jeder Schritt ist ein eigener Bildschirm; die Navigation läuft über main.ts (Pfade), der
+ * Entwurf (Farbe, Nachricht) wird über onChange gesichert und bei jedem Schritt übergeben.
+ */
 
-export interface EditorOptions {
-  initial?: Partial<CardData>;
-  onPreview(card: CardData): void;
-  /** Wird bei jeder Eingabe aufgerufen, um den Entwurf zu sichern. */
-  onChange?(draft: CardData): void;
-  style?: RoseStyle;
+export type EditorStep = "start" | "color" | "message" | "try" | "send";
+
+export const EDITOR_PATHS: Record<EditorStep, string> = {
+  start: "/",
+  color: "/farbe",
+  message: "/nachricht",
+  try: "/probieren",
+  send: "/versenden",
+};
+
+export interface EditorDraft {
+  color: CardColor;
+  quote: number;
 }
 
-export function mountEditorView(root: HTMLElement, opts: EditorOptions) {
-  const state: CardData & { shape: RoseShape } = {
-    color: opts.initial?.color ?? "red",
-    message: opts.initial?.message ?? "",
-    from: opts.initial?.from ?? "",
-    shape: normalizeShape(opts.initial?.shape ?? DEFAULT_SHAPE),
-  };
+export const DEFAULT_DRAFT: EditorDraft = { color: "rosa", quote: 2 };
 
-  // Die Vorschau-Rose wird bei Formänderungen neu aufgebaut.
-  let instance = createRose(state.color, opts.style, state.shape);
-  const preview = h("div", { class: `editor__preview card--${state.color}` }, instance.rose.backEl, instance.rose.el);
-  function rebuildPreview() {
-    instance = createRose(state.color, opts.style, state.shape);
-    preview.replaceChildren(instance.rose.backEl, instance.rose.el);
-  }
+export interface EditorOptions {
+  step: EditorStep;
+  draft: EditorDraft;
+  onChange(draft: EditorDraft): void;
+  go(step: EditorStep): void;
+}
 
-  const swatches = ROSE_COLORS.map((color) =>
+function toCard(draft: EditorDraft): CardData {
+  const v = validateCard({ color: draft.color, quote: draft.quote });
+  if (!v.ok) throw new Error(v.error);
+  return v.card;
+}
+
+export function mountEditorView(root: HTMLElement, opts: EditorOptions): { destroy(): void } {
+  const draft: EditorDraft = { ...DEFAULT_DRAFT, ...opts.draft };
+  let cleanup: (() => void) | null = null;
+
+  const screen = (() => {
+    switch (opts.step) {
+      case "start":
+        return startScreen(opts);
+      case "color":
+        return colorScreen(draft, opts);
+      case "message":
+        return messageScreen(draft, opts);
+      case "try": {
+        const r = tryScreen(toCard(draft), opts);
+        cleanup = r.destroy;
+        return r.el;
+      }
+      case "send":
+        return sendScreen(toCard(draft), opts);
+    }
+  })();
+  root.replaceChildren(screen);
+  return { destroy: () => cleanup?.() };
+}
+
+// --- Start -------------------------------------------------------------------
+function startScreen(opts: EditorOptions): HTMLElement {
+  return h(
+    "section",
+    { class: "screen screen--start" },
+    decor("start", "rosa"),
+    h("div", { class: "screen__visual" }, logoTile()),
+    copy("Sende eine Valentins-Nachricht", "Sende einem Lieblingsmensch eine besondere Nachricht. Wähle eine Farbe, eine Nachricht und versende Sie dann mit einem persönlichen Link an eine Person!"),
+    h("div", { class: "screen__actions screen__actions--center" }, button("Jetzt loslegen", { class: "btn--wide", onClick: () => opts.go("color") })),
+  );
+}
+
+// --- Farbe -------------------------------------------------------------------
+function colorScreen(draft: EditorDraft, opts: EditorOptions): HTMLElement {
+  const hero = h("img", { class: "hero__petal hero__petal--main", src: petalImage("a", draft.color), alt: "" });
+  const label = h("p", { class: "choice__label" }, COLOR_INFO[draft.color].label);
+  const swatches = CARD_COLORS.map((c) =>
+    colorSwatch(c, c === draft.color, (color) => {
+      draft.color = color;
+      opts.onChange(draft);
+      hero.src = petalImage("a", color);
+      label.textContent = COLOR_INFO[color].label;
+      for (const s of swatches) {
+        const active = s.classList.contains(`swatch--${color}`);
+        s.classList.toggle("is-active", active);
+        s.setAttribute("aria-pressed", String(active));
+      }
+    }),
+  );
+  return h(
+    "section",
+    { class: "screen" },
+    decor("color", "rosa"),
+    header(),
+    stepper(1),
+    h(
+      "div",
+      { class: "screen__visual hero" },
+      h("img", { class: "hero__petal hero__petal--left", src: petalImage("c", "white"), alt: "" }),
+      h("img", { class: "hero__petal hero__petal--right", src: petalImage("b", "beige"), alt: "" }),
+      hero,
+    ),
+    copy("Wähle eine Farbe", "Welche Farbe denkst du passt am aller besten für diesen Anlass?"),
+    h("div", { class: "choice" }, h("div", { class: "choice__row" }, ...swatches), label),
+    h("div", { class: "screen__actions" }, backButton(() => opts.go("start")), button("Weiter", { iconRight: "arrowRight", onClick: () => opts.go("message") })),
+  );
+}
+
+// --- Nachricht ---------------------------------------------------------------
+function messageScreen(draft: EditorDraft, opts: EditorOptions): HTMLElement {
+  const text = h("p", { class: "quote__text" }, QUOTES[draft.quote]!.text);
+  const author = h("footer", { class: "quote__author" }, QUOTES[draft.quote]!.author);
+  const label = h("p", { class: "choice__label" }, `Nachricht ${draft.quote + 1}`);
+  const options = QUOTES.map((_, i) =>
     h(
       "button",
       {
         type: "button",
-        class: `swatch swatch--${color}${color === state.color ? " is-active" : ""}`,
-        "aria-label": `Rose ${COLOR_LABELS[color]}`,
-        "aria-pressed": String(color === state.color),
+        class: `option${i === draft.quote ? " is-active" : ""}`,
+        "aria-label": `Nachricht ${i + 1}`,
+        "aria-pressed": String(i === draft.quote),
         onClick: () => {
-          state.color = color;
-          instance.rose.setColor(color, instance.spriteUrlFor(color));
-          opts.onChange?.(state);
-          preview.className = `editor__preview card--${color}`;
-          for (const s of swatches) {
-            const active = s.classList.contains(`swatch--${color}`);
-            s.classList.toggle("is-active", active);
-            s.setAttribute("aria-pressed", String(active));
-          }
+          draft.quote = i;
+          opts.onChange(draft);
+          text.textContent = QUOTES[i]!.text;
+          author.textContent = QUOTES[i]!.author;
+          label.textContent = `Nachricht ${i + 1}`;
+          options.forEach((o, j) => {
+            o.classList.toggle("is-active", j === i);
+            o.setAttribute("aria-pressed", String(j === i));
+          });
         },
       },
-      h("span", { class: "swatch__label" }, COLOR_LABELS[color]),
+      String(i + 1),
     ),
   );
-
-  const counter = h("span", { class: "field__counter" }, `0 / ${LIMITS.message}`);
-  const message = h("textarea", {
-    id: "message",
-    class: "field__input",
-    rows: 5,
-    maxlength: LIMITS.message,
-    placeholder: "Alles Liebe zum Geburtstag! Ich denke an dich …",
-  }) as HTMLTextAreaElement;
-  message.value = state.message;
-  message.addEventListener("input", () => {
-    state.message = message.value;
-    opts.onChange?.(state);
-    counter.textContent = `${message.value.length} / ${LIMITS.message}`;
-  });
-  counter.textContent = `${message.value.length} / ${LIMITS.message}`;
-
-  const from = h("input", { id: "from", class: "field__input", type: "text", maxlength: LIMITS.from, placeholder: "Dein Name (optional)" }) as HTMLInputElement;
-  from.value = state.from ?? "";
-  from.addEventListener("input", () => {
-    state.from = from.value;
-    opts.onChange?.(state);
-  });
-
-  const error = h("p", { class: "form__error", role: "alert", hidden: true });
-
-  // --- Blütenform -------------------------------------------------------------
-  type ShapeKey = keyof RoseShape;
-  const SLIDERS: { key: ShapeKey; label: string; format: (v: number) => string }[] = [
-    { key: "petals", label: "Blätter", format: (v) => `${Math.round(v)}` },
-    { key: "openness", label: "Öffnung", format: (v) => (v < 0.2 ? "geschlossen" : v < 0.5 ? "Knospe" : v < 0.8 ? "halb offen" : "offen") },
-    { key: "spread", label: "Größe", format: (v) => `${Math.round(v * 100)} %` },
-    { key: "twist", label: "Drehung", format: (v) => `${Math.round(v * 100)} %` },
-  ];
-  const sliderInputs = new Map<ShapeKey, { input: HTMLInputElement; value: HTMLElement }>();
-  const sliderRows = SLIDERS.map(({ key, label, format }) => {
-    const lim = SHAPE_LIMITS[key];
-    const value = h("span", { class: "slider__value" }, format(state.shape[key]));
-    const input = h("input", { type: "range", class: "slider__input", id: `shape-${key}`, min: lim.min, max: lim.max, step: lim.step }) as HTMLInputElement;
-    input.value = String(state.shape[key]);
-    input.addEventListener("input", () => {
-      state.shape = normalizeShape({ ...state.shape, [key]: Number(input.value) });
-      value.textContent = format(state.shape[key]);
-      rebuildPreview();
-      opts.onChange?.(state);
-    });
-    sliderInputs.set(key, { input, value });
-    return h("label", { class: "slider", for: `shape-${key}` }, h("span", { class: "slider__label" }, label), input, value);
-  });
-  const resetShape = h("button", { type: "button", class: "btn btn--link" }, "Form zurücksetzen");
-  resetShape.addEventListener("click", () => {
-    state.shape = { ...DEFAULT_SHAPE };
-    for (const { key, format } of SLIDERS) {
-      const s = sliderInputs.get(key)!;
-      s.input.value = String(state.shape[key]);
-      s.value.textContent = format(state.shape[key]);
-    }
-    rebuildPreview();
-    opts.onChange?.(state);
-  });
-
-  const previewBtn = h("button", { type: "button", class: "btn btn--ghost" }, "Vorschau: Karte testen");
-  const submitBtn = h("button", { type: "submit", class: "btn btn--primary" }, "Link erstellen");
-
-  const resultLink = h("a", { class: "result__link", href: "#", target: "_blank", rel: "noopener" });
-  const copyBtn = h("button", { type: "button", class: "btn btn--ghost" }, "Link kopieren");
-  const shareBtn = h("button", { type: "button", class: "btn btn--primary" }, "Teilen");
-  const result = h(
-    "div",
-    { class: "result", hidden: true },
-    h("h2", { class: "result__title" }, "Deine Karte ist fertig 🌹"),
-    h("p", {}, "Schick diesen Link per WhatsApp, Mail oder Nachricht. Am Handy pusten, fertig."),
-    resultLink,
-    h("div", { class: "row" }, copyBtn, shareBtn),
+  return h(
+    "section",
+    { class: "screen screen--quote" },
+    h("div", { class: "stage__corner stage__corner--tl", "aria-hidden": "true" }),
+    h("div", { class: "stage__corner stage__corner--br", "aria-hidden": "true" }),
+    h("div", { class: "quote" }, h("div", { class: "quote__paper" }), h("blockquote", { class: "quote__body" }, text, author)),
+    decor("quote", draft.color),
+    header(),
+    stepper(2),
+    h("div", { class: "screen__visual" }),
+    copy("Wähle eine Nachricht", "Suche dir eine passende Nachricht aus den derzeitigen Vorschlägen aus."),
+    h("div", { class: "choice" }, h("div", { class: "choice__row" }, ...options), label),
+    h("div", { class: "screen__actions" }, backButton(() => opts.go("color")), button("Weiter", { iconRight: "arrowRight", onClick: () => opts.go("try") })),
   );
+}
 
-  function getValidated(): CardData | null {
-    const v = validateCard(state);
-    if (!v.ok) {
-      error.hidden = false;
-      error.textContent = v.error;
-      return null;
-    }
-    error.hidden = true;
-    return v.card;
-  }
+// --- Probieren ---------------------------------------------------------------
+function tryScreen(card: CardData, opts: EditorOptions): { el: HTMLElement; destroy(): void } {
+  const bar = meter();
+  const title = h("h2", { class: "panel__title" }, "Probiere es erstmal selbst aus");
+  const text = h("p", { class: "panel__text" }, "Puste in dein Mikrofon um zu sehen wie deine Nachricht ankommen wird.");
+  const go = button("Okay los", { iconRight: "arrowRight" });
+  const done = button("Fertig", { iconRight: "check", onClick: () => opts.go("send") });
+  done.hidden = true;
 
-  previewBtn.addEventListener("click", () => {
-    const card = getValidated();
-    if (card) opts.onPreview(card);
-  });
-
-  const form = h(
-    "form",
-    {
-      class: "editor__form",
-      onSubmit: (e: Event) => {
-        e.preventDefault();
-        const card = getValidated();
-        if (!card) return;
-        const url = createCardLink(card);
-        resultLink.textContent = url;
-        resultLink.setAttribute("href", url);
-        result.hidden = false;
-        result.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        shareBtn.hidden = !("share" in navigator);
-      },
+  const stage = new BlowStage({
+    color: card.color,
+    message: card.message,
+    author: card.from,
+    onFrame: (_intensity, progress) => bar.set(progress),
+    onReveal: () => {
+      title.hidden = true;
+      text.textContent = "So kommt deine Nachricht an. Zufrieden?";
+      done.hidden = false;
     },
-    h("fieldset", { class: "field" }, h("legend", { class: "field__label" }, "Welche Rose?"), h("div", { class: "swatches" }, ...swatches)),
-    h("div", { class: "field" }, h("label", { class: "field__label", for: "message" }, "Deine Botschaft"), message, counter),
-    h("div", { class: "field" }, h("label", { class: "field__label", for: "from" }, "Von"), from),
-    h("fieldset", { class: "field" }, h("legend", { class: "field__label" }, "Blütenform"), ...sliderRows, resetShape),
-    error,
-    h("div", { class: "row" }, previewBtn, submitBtn),
-    result,
-  );
+  });
 
+  function started(mode: "mic" | "gesture") {
+    go.hidden = true;
+    title.hidden = true;
+    text.textContent = mode === "mic" ? "Puste in dein Mikrofon um die Rosenblätter zu bewegen und deine persönliche Post frei zu legen." : "Ohne Mikrofon: Wische kräftig über die Blätter, um sie wegzupusten.";
+  }
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    started(await stage.start());
+  });
+
+  const el = h(
+    "section",
+    { class: "screen screen--stage" },
+    stage.el,
+    header(),
+    stepper(3),
+    panel(title, text, bar.el, h("div", { class: "panel__actions" }, backButton(() => opts.go("message")), go, done)),
+  );
+  exposeDebug(stage, el, () => {
+    stage.beginGesture();
+    started("gesture");
+  });
+  return { el, destroy: () => stage.destroy() };
+}
+
+// --- Versenden ---------------------------------------------------------------
+function sendScreen(card: CardData, opts: EditorOptions): HTMLElement {
+  const url = createCardLink(card);
+  const copyBtn = button("Link kopieren", { iconLeft: "copy", class: "btn--wide" });
+  const fallback = h("p", { class: "link-fallback", hidden: true }, url);
   copyBtn.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(resultLink.textContent ?? "");
-      copyBtn.textContent = "Kopiert ✓";
-      setTimeout(() => (copyBtn.textContent = "Link kopieren"), 1800);
+      await navigator.clipboard.writeText(url);
+      copyBtn.querySelector(".btn__label")!.textContent = "Kopiert ✓";
+      setTimeout(() => (copyBtn.querySelector(".btn__label")!.textContent = "Link kopieren"), 1800);
     } catch {
-      copyBtn.textContent = "Bitte manuell kopieren";
+      fallback.hidden = false;
     }
+    // Wo vorhanden, zusätzlich das Teilen-Menü anbieten (Messenger, Mail).
+    navigator.share?.({ title: "Eine Valentins-Nachricht für dich", url }).catch(() => {});
   });
-  shareBtn.addEventListener("click", () => {
-    navigator.share?.({ title: "Eine Rose für dich", text: "Puste ins Handy und schau, was passiert 🌹", url: resultLink.textContent ?? "" }).catch(() => {});
-  });
-
-  const view = h(
+  return h(
     "section",
-    { class: "editor" },
-    h("header", { class: "editor__head" },
-      h("p", { class: "eyebrow" }, "Pusteblume"),
-      h("h1", { class: "editor__title" }, "Eine Rose, die sich öffnet, wenn man pustet."),
-      h("p", { class: "editor__lead" }, "Wähle die Farbe, schreib deine Botschaft und verschick den Link. Der Empfänger pustet ins Handy, die Blätter fliegen davon und deine Worte kommen zum Vorschein."),
+    { class: "screen" },
+    decor("send", card.color),
+    header(),
+    h("div", { class: "screen__visual" }, sendReadyIcon()),
+    copy("Versende deinen Valentins-Gruß", "Kopiere deinen Link und sende Ihn an deinen Lieblingsmenschen via E-Mail oder einer Messenger Chat App deiner Wahl."),
+    fallback,
+    h(
+      "div",
+      { class: "screen__actions screen__actions--stack" },
+      copyBtn,
+      button("Neue Nachricht erstellen", { kind: "ghost", class: "btn--wide", onClick: () => opts.go("start") }),
     ),
-    preview,
-    form,
   );
-  root.replaceChildren(view);
+}
+
+/** Debug-Haken für Playwright: window.__pusteblume (siehe CLAUDE.md). */
+export function exposeDebug(stage: BlowStage, el: HTMLElement, begin: () => void = () => stage.beginGesture()) {
+  (window as unknown as { __pusteblume?: unknown }).__pusteblume = {
+    begin,
+    blow: (strength: number) => stage.blow(strength),
+    get progress() {
+      return stage.progress;
+    },
+    get revealed() {
+      return stage.revealed;
+    },
+    get mode() {
+      return stage.activeMode;
+    },
+    el,
+  };
 }

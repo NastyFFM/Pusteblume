@@ -1,21 +1,23 @@
 # Pusteblume 🌹
 
-Interaktive, mobile Grußkarten: Eine Rose verdeckt eine persönliche Botschaft.
-Der Empfänger pustet ins Mikrofon des Handys, die Blütenblätter fliegen davon
-(je kräftiger, desto wilder) und die Botschaft liegt frei.
+Interaktive, mobile Valentins-Karte nach dem Figma-Design „Valentines App“: Ein Bett aus Rosenblättern
+in einer Schachtel verdeckt eine persönliche Botschaft. Der Empfänger pustet ins Mikrofon des Handys,
+die Blütenblätter fliegen davon (je kräftiger, desto wilder) und die Botschaft liegt frei.
 
 Die App läuft rein im Frontend, ohne Server und ohne Datenbank. Production-Branch ist `main`.
 
 ## Was drin ist
 
-- **Editor** (`/`): Rosenfarbe (rot, weiß, gelb), Botschaft, Absender, Blütenform (Blattzahl 5–110, Öffnung von geschlossener Knospe bis offen, Größe 30–140 %, Drehung)
-  mit Live-Vorschau, Link erzeugen, kopieren oder teilen. Die Form wandert mit in den Link (`shared/card.ts`, `RoseShape`),
-  Standardwerte werden weggelassen.
-- **Karte** (`/v/<kodierte Karte>`): Rose über der Botschaft, Pust-Erkennung per Web Audio API,
-  Fallback per Wischen (ohne Mikrofon) und Leertaste (Desktop).
-- **Links**: Die Karte steckt vollständig im Link (base64url-kodiertes JSON). Nichts wird gespeichert.
-- **Rose**: Sprite-Atlas aus echten Blattfotos (Standard) oder prozedurales SVG; Stiel und Kelchblätter liegen in einer
-  eigenen Ebene hinter der Botschaft und werden mit derselben Kamera projiziert.
+- **Ersteller** (`/` → `/farbe` → `/nachricht` → `/probieren` → `/versenden`): Blattfarbe (Rot, Weiß, Rosa, Beige, Grau),
+  eine von fünf Zitat-Vorlagen, selbst ausprobieren, Link kopieren oder teilen.
+- **Empfänger** (`/v/<kodierte Karte>`): Blätterbett über der Botschaft, Pust-Erkennung per Web Audio API,
+  Fallback per Wischen (ohne Mikrofon) und Leertaste (Desktop), danach Einladung zur eigenen Nachricht.
+- **Links**: Die Karte steckt vollständig im Link (base64url-kodiertes JSON, `shared/link.ts`). Nichts wird gespeichert.
+- **Assets**: Blätter und Blätterhaufen aus dem Design, je Farbe eingefärbt (`node tools/make-design-assets.cjs`),
+  Schriften Inter und Instrument Serif selbst gehostet.
+
+Die frühere Rosen-Darstellung (Sprite-Atlas, Pseudo-3D) liegt weiter unter `src/rose/` und `src/view/`, wird aber
+nicht mehr benutzt; die Atlas-Pipeline unten ist deshalb nur noch historisch.
 
 ## Entwicklung
 
@@ -40,10 +42,13 @@ Kurzlinks mit Datenbank (Vercel Functions + Upstash Redis) waren in einer frühe
 ## Projektstruktur
 
 ```
-shared/         Datenmodell, Validierung, Link-Kodierung (+ Tests)
-src/rose/       Rosenmodell (model.ts), SVG-Renderer, Pust-Physik
+shared/         Datenmodell (Farben, Zitate), Validierung, Link-Kodierung (+ Tests)
+src/ui/         Bausteine (kit.ts), Bühne (blow-stage.ts), Ersteller- und Empfänger-Flow
+src/petals/     Blütenbett (Verteilung und DOM der Blatt-Sprites)
+src/rose/       Pust-Physik (physics.ts); Rest = alte Rosen-Darstellung, ungenutzt
 src/blow/       Mikrofon-Erkennung und Gesten-Fallback
-src/ui/         Editor- und Kartenansicht
+public/design/  Logo, Blätter, Papier (aus Figma) · public/fonts/ Schriften
+tools/          make-design-assets.cjs (Asset-Pipeline), build-atlas.ts (alte Sprite-Pipeline)
 ```
 
 ## Sprite-Pipeline: Blätter-Bild -> Atlas -> Rose

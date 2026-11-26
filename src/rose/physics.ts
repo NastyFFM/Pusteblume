@@ -65,7 +65,7 @@ export class RosePhysics {
   private readonly order: Petal[];
 
   constructor(
-    private readonly model: RoseModel,
+    private readonly model: Pick<RoseModel, "petals">,
     private readonly events: PhysicsEvents = {},
   ) {
     this.order = [...model.petals].sort((a, b) => a.releaseAt - b.releaseAt);
