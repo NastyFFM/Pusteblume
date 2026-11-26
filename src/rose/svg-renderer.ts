@@ -1,6 +1,6 @@
 import type { RoseColor } from "../../shared/card";
 import { HEART_RING, PALETTES, type Petal, type RoseModel } from "./model";
-import { discMatrix, petalMatrix, placePetal, project, type Camera, type Placement3D } from "./projection";
+import { discMatrix, lightFactor, petalMatrix, placePetal, project, type Camera, type Placement3D, type PetalTransform } from "./projection";
 
 export interface PetalPose {
   /** Verschiebung des Pivots gegenüber der Ruhelage */
@@ -20,6 +20,41 @@ export interface PetalPose {
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEW = 150;
 
+/** Ab dieser Bildschirm-Geschwindigkeit (Einheiten/s) bekommt ein fliegendes Blatt Bewegungsunschärfe. */
+const MOTION_MIN_SPEED = 140;
+/** Stufengrenzen und zugehörige Unschärfe (stdDeviation in viewBox-Einheiten) */
+const MOTION_STEPS: { speed: number; sigma: number }[] = [
+  { speed: 300, sigma: 0.9 },
+  { speed: 460, sigma: 1.7 },
+  { speed: Infinity, sigma: 2.5 },
+];
+/** Fliegende Blätter ab dieser Skalierung (kommen dem Betrachter entgegen) werden leicht unscharf. */
+const NEAR_BLUR_SCALE = 1.3;
+
+/** Feste Tiefenschärfe-Stufen: hinten leicht unscharf, Mitte fast scharf, vorn scharf (kein Filter). */
+const DOF_FAR = "url(#dof-far)";
+const DOF_MID = "url(#dof-mid)";
+const DOF_NEAR = "";
+
+/** DOM-Knoten eines Blatts samt gecachtem Zustand, damit pro Frame nur geänderte Attribute geschrieben werden. */
+interface PetalNode {
+  /** äußere Gruppe ohne Transform: trägt den Filter (Unschärfe im Bildschirmraum) und die Deckkraft */
+  g: SVGGElement;
+  /** innere Gruppe mit der Projektionsmatrix */
+  body: SVGGElement;
+  /** dunkle bzw. helle Deckkopie in Blattform für die Beleuchtung */
+  dark: SVGElement;
+  light: SVGElement;
+  /** true: Kopien sind Sprite-Bilder mit Blend-Modus, false: gefüllte Pfade */
+  sprite: boolean;
+  /** zuletzt gesetzter Filter-Wert ("" = keiner) */
+  filter: string;
+  /** zuletzt gesetzter Helligkeitsfaktor (quantisiert) */
+  shade: number;
+  /** -1 dunkle Kopie sichtbar, 1 helle, 0 keine */
+  shadeMode: -1 | 0 | 1;
+}
+
 function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
   const node = document.createElementNS(SVG_NS, name);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
@@ -35,7 +70,7 @@ export class RoseSvg {
   readonly el: SVGSVGElement;
   /** Blätter (liegen hinter der Botschaft) */
   readonly backEl: SVGSVGElement;
-  private readonly petalGroups = new Map<number, SVGGElement>();
+  private readonly petalNodes = new Map<number, PetalNode>();
   private readonly placements = new Map<number, Placement3D>();
   private readonly depths = new Map<number, number>();
   /** zuletzt gesetzte Pose je Blatt, damit ein Kamerawechsel sie neu projizieren kann */
@@ -47,6 +82,9 @@ export class RoseSvg {
   private readonly petalLayer: SVGGElement;
   private backing!: SVGEllipseElement;
   private backingRadius = 0;
+  /** weicher dunkler Verlauf über der Blütenmitte (über den Blättern) */
+  private innerShade!: SVGEllipseElement;
+  private innerShadeLift = 0;
   private color: RoseColor;
   private camera: Camera;
   private sortDirty = true;
@@ -71,6 +109,8 @@ export class RoseSvg {
     this.defs = el("defs");
     this.el.appendChild(this.defs);
     this.buildDefs();
+    // Unschärfe-Filter sind farbunabhängig und werden nur einmal angelegt.
+    this.el.appendChild(this.buildFilterDefs());
 
     this.backEl = el("svg", { viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`, class: "rose rose--back", "aria-hidden": "true" });
     const backDefs = el("defs");
@@ -88,6 +128,12 @@ export class RoseSvg {
     this.petalLayer = el("g", { class: "rose__petals" });
     this.el.appendChild(this.petalLayer);
     this.buildPetals();
+    // Innere Verschattung: liegt über den Blättern, mit der Kamera als Ellipse projiziert.
+    // Höhe etwa auf halber Höhe der inneren Blattbasen, damit sie in der Schrägansicht nicht "schwebt".
+    const shadeR = model.radius * 0.45;
+    this.innerShadeLift = Math.max(0, ...model.petals.map((p) => p.lift)) * 0.5;
+    this.innerShade = el("ellipse", { class: "rose__shade", cx: 0, cy: 0, rx: shadeR, ry: shadeR, fill: "url(#shade-grad)", "pointer-events": "none" });
+    this.el.appendChild(this.innerShade);
     this.applyCamera();
   }
 
@@ -106,6 +152,7 @@ export class RoseSvg {
 
   private applyCamera() {
     this.backing.setAttribute("transform", discMatrix(this.camera, 1));
+    this.innerShade.setAttribute("transform", discMatrix(this.camera, this.innerShadeLift));
     for (const { g, placement, size } of this.sepalGroups) g.setAttribute("transform", petalMatrix(placement, this.camera, size).matrix);
     this.updateStem();
     for (const petal of this.model.petals) {
@@ -117,7 +164,11 @@ export class RoseSvg {
     this.sortByDepth();
   }
 
-  /** Blattgruppen nach Tiefe ordnen: ferne zuerst, nahe zuletzt. Fliegende Blätter ganz oben. */
+  /**
+   * Blattgruppen nach Tiefe ordnen: ferne zuerst, nahe zuletzt. Fliegende Blätter ganz oben.
+   * Dabei bekommen die sitzenden Blätter ihre Tiefenschärfe-Stufe (Drittel nach Tiefe):
+   * das passiert nur hier, also bei Kamerawechsel oder wenn ein Blatt zu fliegen beginnt/aufhört.
+   */
   private sortByDepth() {
     if (!this.sortDirty) return;
     this.sortDirty = false;
@@ -126,10 +177,72 @@ export class RoseSvg {
       const db = this.depths.get(b.id) ?? 0;
       return da - db || b.ring - a.ring;
     });
+    const attached = order.filter((p) => this.lastPose.get(p.id)?.pose === undefined);
+    const third = attached.length / 3;
+    attached.forEach((petal, i) => {
+      const node = this.petalNodes.get(petal.id);
+      if (node) this.applyFilter(node, i < third ? DOF_FAR : i < 2 * third ? DOF_MID : DOF_NEAR);
+    });
     for (const petal of order) {
-      const g = this.petalGroups.get(petal.id);
-      if (g) this.petalLayer.appendChild(g);
+      const node = this.petalNodes.get(petal.id);
+      if (node) this.petalLayer.appendChild(node.g);
     }
+  }
+
+  /** Filter-Attribut nur schreiben, wenn es sich ändert (Filterwechsel sind teuer). */
+  private applyFilter(node: PetalNode, filter: string) {
+    if (node.filter === filter) return;
+    node.filter = filter;
+    if (filter) node.g.setAttribute("filter", filter);
+    else node.g.removeAttribute("filter");
+  }
+
+  /** Filter eines fliegenden Blatts: Bewegungsunschärfe nach Richtung und Tempo, sonst Nähe-Unschärfe. */
+  private flyingFilter(pose: PetalPose): string {
+    const vx = pose.vx ?? 0, vy = pose.vy ?? 0;
+    const speed = Math.hypot(vx, vy);
+    if (speed >= MOTION_MIN_SPEED) {
+      let step = 1;
+      while (step < MOTION_STEPS.length && speed >= MOTION_STEPS[step - 1]!.speed) step++;
+      const ax = Math.abs(vx), ay = Math.abs(vy);
+      const dirClass = ay < 0.42 * ax ? "h" : ax < 0.42 * ay ? "v" : "d";
+      return `url(#mb-${dirClass}${step})`;
+    }
+    return pose.scale > NEAR_BLUR_SCALE ? DOF_FAR : DOF_NEAR;
+  }
+
+  /**
+   * Beleuchtung: Helligkeitsfaktor (ca. 0.72..1.08) auf die Deckkopie in Blattform übertragen.
+   * Unter 1 wird die dunkle Kopie eingeblendet, über 1 die helle; nur eine ist je sichtbar.
+   * Quantisiert in 0.02-Schritten, damit pro Frame meist kein DOM-Schreibzugriff nötig ist.
+   */
+  private applyShade(node: PetalNode, factor: number) {
+    const q = Math.round(factor * 50) / 50;
+    if (q === node.shade) return;
+    node.shade = q;
+    let mode: -1 | 0 | 1 = 0;
+    if (q < 0.995) {
+      mode = -1;
+      // Sprite: Multiplikation des Bilds mit sich selbst dunkelt satte Kanäle nur schwach ab,
+      // daher stärkere Deckkraft als beim schwarz gefüllten Pfad.
+      const o = Math.min(1, (1 - q) * (node.sprite ? 3.2 : 1.1));
+      node.dark.style.opacity = o.toFixed(2);
+    } else if (q > 1.005) {
+      mode = 1;
+      const o = Math.min(1, (q - 1) * (node.sprite ? 7.5 : 1.3));
+      node.light.style.opacity = o.toFixed(2);
+    }
+    if (mode !== node.shadeMode) {
+      node.shadeMode = mode;
+      node.dark.style.display = mode === -1 ? "" : "none";
+      node.light.style.display = mode === 1 ? "" : "none";
+    }
+  }
+
+  /** Projektionsmatrix und Beleuchtung eines Blatts setzen (gemeinsamer Teil von Pose, Ruhe und Zittern). */
+  private applyTransform(node: PetalNode, t: PetalTransform, prefix = "") {
+    node.body.setAttribute("transform", prefix + t.matrix);
+    this.applyShade(node, lightFactor(t.normal, t.facing));
   }
 
   setColor(color: RoseColor, spriteUrl?: string) {
@@ -143,18 +256,22 @@ export class RoseSvg {
 
   /** Pose eines Blatts setzen; `pose` undefined = Ruhelage. */
   setPose(petal: Petal, pose?: PetalPose) {
-    const g = this.petalGroups.get(petal.id);
+    const node = this.petalNodes.get(petal.id);
     const placement = this.placements.get(petal.id);
-    if (!g || !placement) return;
+    if (!node || !placement) return;
+    const g = node.g;
     const wasFlying = this.lastPose.get(petal.id)?.pose !== undefined;
     this.lastPose.set(petal.id, { pose, tremble: 0 });
     if (!pose) {
-      const { matrix, depth } = petalMatrix(placement, this.camera, petal.size);
-      g.setAttribute("transform", matrix);
+      const t = petalMatrix(placement, this.camera, petal.size);
+      this.applyTransform(node, t);
       g.style.opacity = "";
       g.style.display = "";
-      this.depths.set(petal.id, depth);
-      if (wasFlying) this.sortDirty = true;
+      this.depths.set(petal.id, t.depth);
+      if (wasFlying) {
+        this.sortDirty = true;
+        this.sortByDepth();
+      }
       return;
     }
     if (pose.alpha <= 0) {
@@ -163,27 +280,31 @@ export class RoseSvg {
     }
     g.style.display = "";
     g.style.opacity = pose.alpha.toFixed(3);
-    const { matrix, depth } = petalMatrix(placement, this.camera, petal.size * pose.scale, pose.rot);
-    g.setAttribute("transform", `translate(${pose.dx.toFixed(2)} ${pose.dy.toFixed(2)}) ${matrix}`);
+    const t = petalMatrix(placement, this.camera, petal.size * pose.scale, pose.rot, pose.flip ?? 0);
+    this.applyTransform(node, t, `translate(${pose.dx.toFixed(2)} ${pose.dy.toFixed(2)}) `);
     // Fliegende Blätter kommen dem Betrachter entgegen: immer vor den sitzenden zeichnen.
-    this.depths.set(petal.id, depth + 1000);
+    this.depths.set(petal.id, t.depth + 1000);
+    this.applyFilter(node, this.flyingFilter(pose));
     if (!wasFlying) this.sortDirty = true;
     this.sortByDepth();
   }
 
   /** Leichtes Zittern eines sitzenden Blatts (Feedback beim sanften Pusten). */
   setTremble(petal: Petal, degrees: number) {
-    const g = this.petalGroups.get(petal.id);
+    const node = this.petalNodes.get(petal.id);
     const placement = this.placements.get(petal.id);
-    if (!g || !placement) return;
+    if (!node || !placement) return;
     const wasFlying = this.lastPose.get(petal.id)?.pose !== undefined;
     this.lastPose.set(petal.id, { tremble: degrees });
-    const { matrix, depth } = petalMatrix(placement, this.camera, petal.size, degrees);
-    g.setAttribute("transform", matrix);
-    g.style.opacity = "";
-    g.style.display = "";
-    this.depths.set(petal.id, depth);
-    if (wasFlying) this.sortDirty = true;
+    const t = petalMatrix(placement, this.camera, petal.size, degrees);
+    this.applyTransform(node, t);
+    node.g.style.opacity = "";
+    node.g.style.display = "";
+    this.depths.set(petal.id, t.depth);
+    if (wasFlying) {
+      this.sortDirty = true;
+      this.sortByDepth();
+    }
   }
 
   /** Fortschritt 0..1 (Anteil gelöster Blätter): Deckscheibe gegen Ende ausblenden. */
@@ -193,6 +314,7 @@ export class RoseSvg {
     const [from, to] = threeD ? [0.72, 0.97] : [0.55, 0.9];
     const o = 1 - Math.max(0, Math.min(1, (progress - from) / (to - from)));
     this.backing.style.opacity = o.toFixed(3);
+    this.innerShade.style.opacity = o.toFixed(3);
     if (threeD) {
       // Scheibe schrumpft mit der verbleibenden Blütenmasse (äußere Blätter gehen zuerst).
       const r = this.backingRadius * (1 - 0.6 * Math.max(0, Math.min(1, progress)));
@@ -231,9 +353,42 @@ export class RoseSvg {
     const shadow = el("filter", { id: "petal-shadow", x: "-30%", y: "-30%", width: "160%", height: "160%" });
     shadow.append(el("feDropShadow", { dx: 0, dy: 1.2, stdDeviation: 1.4, "flood-color": pal.heart, "flood-opacity": 0.45 }));
 
-    this.defs.append(outer, inner, backing, shadow);
+    // Innere Verschattung: weicher dunkler Verlauf, zum Rand hin vollständig durchsichtig.
+    const shade = el("radialGradient", { id: "shade-grad" });
+    shade.append(
+      el("stop", { offset: 0, "stop-color": pal.heart, "stop-opacity": 0.5 }),
+      el("stop", { offset: 0.45, "stop-color": pal.heart, "stop-opacity": 0.28 }),
+      el("stop", { offset: 1, "stop-color": pal.heart, "stop-opacity": 0 }),
+    );
+
+    this.defs.append(outer, inner, backing, shadow, shade);
     this.el.style.setProperty("--rim", pal.rim);
     this.el.style.setProperty("--deep", pal.deep);
+  }
+
+  /**
+   * Vordefinierte Unschärfe-Filter (ohne Farbbezug): drei Tiefenschärfe-Stufen (die vorderste
+   * ist "kein Filter") und je drei Stärken für horizontale, vertikale und diagonale
+   * Bewegungsunschärfe. Pro Blatt wird nur das `filter`-Attribut gewechselt, nie ein Filter angelegt.
+   * Die Filter sitzen auf der äußeren, nicht transformierten Gruppe, damit stdDeviation
+   * in Bildschirm-(viewBox-)Einheiten und achsenparallel zum Bildschirm wirkt.
+   */
+  private buildFilterDefs(): SVGDefsElement {
+    const defs = el("defs");
+    const blur = (id: string, sx: number, sy: number, margin: number) => {
+      const f = el("filter", { id, x: `${-margin}%`, y: `${-margin}%`, width: `${100 + 2 * margin}%`, height: `${100 + 2 * margin}%`, "color-interpolation-filters": "sRGB" });
+      f.appendChild(el("feGaussianBlur", { stdDeviation: `${sx} ${sy}` }));
+      defs.appendChild(f);
+    };
+    blur("dof-far", 0.6, 0.6, 12);
+    blur("dof-mid", 0.22, 0.22, 8);
+    MOTION_STEPS.forEach(({ sigma }, i) => {
+      const n = i + 1;
+      blur(`mb-h${n}`, sigma, sigma * 0.3, 25);
+      blur(`mb-v${n}`, sigma * 0.3, sigma, 25);
+      blur(`mb-d${n}`, sigma * 0.75, sigma * 0.75, 25);
+    });
+    return defs;
   }
 
   private buildStem(): SVGGElement {
@@ -286,9 +441,12 @@ export class RoseSvg {
     // Äußere Ringe zuerst zeichnen, damit innere oben liegen.
     const sorted = [...this.model.petals].sort((a, b) => b.ring - a.ring);
     for (const petal of sorted) {
+      // Äußere Gruppe: Filter und Deckkraft. Innere Gruppe: Projektionsmatrix (pro Frame).
       const g = el("g", { class: "petal", "data-id": petal.id });
+      const body = el("g", { class: "petal__body" });
       const rotation = petal.shape.kind === "sprite" ? petal.shape.rotation : 0;
       const shapeGroup = el("g", { transform: `rotate(${rotation}) translate(${-petal.shape.pivot.x} ${-petal.shape.pivot.y})` });
+      let dark: SVGElement, light: SVGElement;
 
       if (petal.shape.kind === "path") {
         const innerRing = petal.ring <= HEART_RING;
@@ -315,20 +473,40 @@ export class RoseSvg {
             }),
           );
         }
+        // Beleuchtung: schwarz bzw. weiß gefüllte Kopie des Umrisses, Deckkraft = Stärke.
+        dark = el("path", { d: petal.shape.d, class: "petal__shade", fill: "#000", "pointer-events": "none" });
+        light = el("path", { d: petal.shape.d, class: "petal__shade", fill: "#fff", "pointer-events": "none" });
+        shapeGroup.append(dark, light);
       } else {
         // Sprite-Atlas: verschachteltes <svg> mit viewBox schneidet den Ausschnitt aus dem Atlasbild.
         const s = petal.shape;
         const crop = el("svg", { x: 0, y: 0, width: s.width, height: s.height, viewBox: `${s.x} ${s.y} ${s.width} ${s.height}`, overflow: "hidden" });
-        const img = el("image", { href: s.url, x: 0, y: 0, class: "petal__sprite", preserveAspectRatio: "none" });
-        img.setAttribute("width", String(this.atlasSize.width));
-        img.setAttribute("height", String(this.atlasSize.height));
-        crop.appendChild(img);
+        const sprite = (cls: string) => {
+          const img = el("image", { href: s.url, x: 0, y: 0, class: cls, preserveAspectRatio: "none" });
+          img.setAttribute("width", String(this.atlasSize.width));
+          img.setAttribute("height", String(this.atlasSize.height));
+          return img;
+        };
+        crop.appendChild(sprite("petal__sprite"));
+        // Beleuchtung ohne Filter: dieselbe Sprite-Kopie mit sich selbst multipliziert (dunkler)
+        // bzw. per Screen addiert (heller). Die Kopie ist nur dort sichtbar, wo das Blatt ist,
+        // und blendet nur mit dem direkt darunter liegenden, deckenden Blatt.
+        dark = sprite("petal__sprite petal__shade");
+        dark.style.mixBlendMode = "multiply";
+        light = sprite("petal__sprite petal__shade");
+        light.style.mixBlendMode = "screen";
+        dark.setAttribute("pointer-events", "none");
+        light.setAttribute("pointer-events", "none");
+        crop.append(dark, light);
         shapeGroup.appendChild(crop);
       }
+      dark.style.display = "none";
+      light.style.display = "none";
 
-      g.appendChild(shapeGroup);
+      body.appendChild(shapeGroup);
+      g.appendChild(body);
       this.petalLayer.appendChild(g);
-      this.petalGroups.set(petal.id, g);
+      this.petalNodes.set(petal.id, { g, body, dark, light, sprite: petal.shape.kind === "sprite", filter: "", shade: -1, shadeMode: 0 });
     }
   }
 }
