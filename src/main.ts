@@ -30,8 +30,15 @@ function writeJson(key: string, value: unknown) {
 
 let activeView: { destroy(): void } | null = null;
 
-// ?fx=lite: ohne SVG-Filter (für schwache Geräte oder zum Vergleich)
-FX.lite = new URLSearchParams(location.search).get("fx") === "lite";
+// ?fx=lite,noshade,nosort | off: Effekte zum Eingrenzen von Darstellungsproblemen abschalten
+{
+  const fx = new Set((new URLSearchParams(location.search).get("fx") ?? "").split(",").map((t) => t.trim()).filter(Boolean));
+  const off = fx.has("off");
+  FX.lite = off || fx.has("lite");
+  FX.shade = !(off || fx.has("noshade"));
+  FX.resort = !(off || fx.has("nosort"));
+  document.documentElement.dataset.fx = [...fx].join(" ");
+}
 
 /** Standard-Atlas; ?rose=<name> wählt einen anderen, ?rose=svg die gezeichnete Rose. */
 const DEFAULT_ROSE = "rose2";

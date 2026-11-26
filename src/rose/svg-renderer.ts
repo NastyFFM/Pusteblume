@@ -42,7 +42,14 @@ const MAX_MOTION_BLUR = 8;
  * Effekt-Schalter. `lite` schaltet alle SVG-Filter (Tiefenschärfe, Bewegungsunschärfe) ab,
  * Beleuchtung und Schattierung bleiben. Wird von main.ts über ?fx=lite gesetzt.
  */
-export const FX = { lite: false };
+export const FX = {
+  /** keine SVG-Filter (Tiefenschärfe, Bewegungsunschärfe) */
+  lite: false,
+  /** Schattierungskopien (multiply/screen) pro Blatt */
+  shade: true,
+  /** Tiefensortierung zur Laufzeit (Umhängen im DOM); false = nur Anfangsreihenfolge */
+  resort: true,
+};
 
 /** Tiefenschärfe-Stufe eines sitzenden Blatts: hinten leicht unscharf, Mitte normal, vorn scharf */
 type DepthTier = "far" | "mid" | "near";
@@ -207,6 +214,7 @@ export class RoseSvg {
   private sortByDepth() {
     if (!this.sortDirty) return;
     this.sortDirty = false;
+    if (!FX.resort && this.order.length > 0) return;
     if (this.orderStillValid()) return;
     const { order: sorted, moved } = this.nextOrder();
     this.order = sorted.map((p) => p.id);
@@ -338,6 +346,7 @@ export class RoseSvg {
    * Quantisiert in 0.02-Schritten, damit pro Frame meist kein DOM-Schreibzugriff nötig ist.
    */
   private applyShade(node: PetalNode, factor: number) {
+    if (!FX.shade) return;
     const q = Math.round(factor * 50) / 50;
     if (q === node.shade) return;
     node.shade = q;

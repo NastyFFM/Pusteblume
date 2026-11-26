@@ -229,3 +229,12 @@ p { margin: 0; }
   .mote { opacity: var(--alpha, 0.4); }
   .motes { transition: none; transform: none; }
 }
+
+/* ?fx=off: auch Bühneneffekte aus, zum Eingrenzen von Darstellungsproblemen */
+html[data-fx~="off"] .stage-shadow,
+html[data-fx~="off"] .motes,
+html[data-fx~="off"] .glow,
+html[data-fx~="off"] .card::after { display: none !important; }
+html[data-fx~="off"] .card__stage .rose,
+html[data-fx~="off"] .editor__preview { animation: none !important; }
+html[data-fx~="off"] .card__stage .rose { filter: none !important; }
