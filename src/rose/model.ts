@@ -127,7 +127,7 @@ function leafPath(len: number): { d: string; vein: string } {
   return { d, vein };
 }
 
-interface RingSpec {
+export interface RingSpec {
   count: number;
   radius: number;
   height: number;
@@ -135,8 +135,8 @@ interface RingSpec {
   tilt: number;
 }
 
-/** Ringe von innen nach außen. */
-const RINGS: RingSpec[] = [
+/** Ringe von innen nach außen (SVG-Rose). */
+export const SVG_RINGS: RingSpec[] = [
   { count: 4, radius: 3, height: 17, openness: 0, tilt: 58 },
   { count: 5, radius: 7, height: 25, openness: 0.08, tilt: 48 },
   { count: 6, radius: 13, height: 33, openness: 0.22, tilt: 34 },
@@ -149,7 +149,7 @@ const RINGS: RingSpec[] = [
 /** Ring-Index der Herzscheibe: liegt über Ring 2, unter Ring 0 und 1. */
 export const HEART_RING = 1.5;
 
-export function createRoseModel(seed = 7): RoseModel {
+export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS): RoseModel {
   const rnd = mulberry32(seed);
   const petals: Petal[] = [];
   let id = 0;

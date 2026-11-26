@@ -7,8 +7,8 @@ import { loadPng } from "./image";
  * ChatGPT-Blättersheet (4x4, Alphakanal). Laut Prompt zeigt bei jedem Blatt die Basis
  * nach unten, die Spitze nach oben. Erwartet: Rotation nahe 0°, Pivot im unteren Blattbereich.
  */
-describe("Pipeline am KI-Bild", () => {
-  const img = loadPng(join(__dirname, "..", "fixtures", "ai", "chatgpt-rose-petals.png"));
+describe.each(["chatgpt-rose-petals.png", "chatgpt-rose-inner.png"])("Pipeline am KI-Bild %s", (file) => {
+  const img = loadPng(join(__dirname, "..", "fixtures", "ai", file));
   removeBackground(img);
   const blobs = findBlobs(img, 300);
 

@@ -323,29 +323,50 @@ function paleBase(blob: Blob, img: Image, cx: number, cy: number, approxLength: 
   const cut = sorted[Math.floor(n * 0.96)]!;
   if (cut - median < 0.06) return null; // kein deutlicher Kontrast
 
-  let sx = 0, sy = 0, count = 0, spread = 0;
+  // Kandidaten einsammeln
+  const px: number[] = [], py: number[] = [];
   for (let i = 0; i < n; i++) {
     if (scores[i]! < cut) continue;
     const p = blob.pixels[i]!;
     const x = p % img.width;
-    const y = (p - x) / img.width;
-    sx += x;
-    sy += y;
-    count++;
+    px.push(x);
+    py.push((p - x) / img.width);
   }
-  if (count < 20) return null;
-  sx /= count;
-  sy /= count;
-  for (let i = 0; i < n; i++) {
-    if (scores[i]! < cut) continue;
-    const p = blob.pixels[i]!;
-    const x = p % img.width;
-    const y = (p - x) / img.width;
-    spread += Math.hypot(x - sx, y - sy);
+  if (px.length < 20) return null;
+
+  // Dichteste Stelle der hellen Pixel: Raster zählen, dichteste Zelle als Start, dann zweimal
+  // den Mittelwert der Pixel im Umkreis nehmen (Mean-Shift). Dünne Glanzstreifen am Blattrand
+  // verteilen sich über viele Zellen und verlieren so gegen die kompakte Basis.
+  const cell = Math.max(2, approxLength * 0.08);
+  const counts = new Map<string, { n: number; x: number; y: number }>();
+  for (let i = 0; i < px.length; i++) {
+    const key = `${Math.floor(px[i]! / cell)},${Math.floor(py[i]! / cell)}`;
+    const c = counts.get(key) ?? { n: 0, x: 0, y: 0 };
+    c.n++;
+    c.x += px[i]!;
+    c.y += py[i]!;
+    counts.set(key, c);
   }
-  spread /= count;
-  // Die hellen Pixel müssen gebündelt sein (keine Glanzlichter überall) und abseits der Mitte liegen.
-  if (spread > approxLength * 0.2) return null;
+  let start = { n: 0, x: 0, y: 0 };
+  for (const c of counts.values()) if (c.n > start.n) start = c;
+  let sx = start.x / start.n, sy = start.y / start.n;
+  const radius = approxLength * 0.15;
+  let kept = 0;
+  for (let iter = 0; iter < 2; iter++) {
+    let ax = 0, ay = 0;
+    kept = 0;
+    for (let i = 0; i < px.length; i++) {
+      if (Math.hypot(px[i]! - sx, py[i]! - sy) > radius) continue;
+      ax += px[i]!;
+      ay += py[i]!;
+      kept++;
+    }
+    if (kept === 0) return null;
+    sx = ax / kept;
+    sy = ay / kept;
+  }
+  if (kept < px.length * 0.25 || kept < 20) return null; // keine klare Hauptgruppe
+  // Die Basis liegt abseits der Blattmitte.
   if (Math.hypot(sx - cx, sy - cy) < approxLength * 0.2) return null;
   return { x: sx, y: sy };
 }

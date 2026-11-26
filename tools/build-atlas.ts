@@ -1,10 +1,11 @@
 /**
  * Pipeline: Blätter-Bild -> freigestellte Einzelblätter -> Sprite-Atlas + Pivots.
  *
- *   npx tsx tools/build-atlas.ts <eingabe.png> <name> [--min-area 300] [--tolerance 40]
+ *   npx tsx tools/build-atlas.ts <eingabe.png> [weitere.png ...] <name> [--min-area 300] [--tolerance 40]
  *
  * Erzeugt public/rose/<name>/petals.json sowie atlas-red.png, atlas-white.png, atlas-yellow.png.
- * Eingabe: ein Bild mit mehreren Blütenblättern auf einfarbigem Hintergrund (oder mit Alphakanal).
+ * Eingabe: ein oder mehrere Bilder mit Blütenblättern auf einfarbigem Hintergrund (oder mit Alphakanal),
+ * z. B. ein Sheet mit offenen Außenblättern und eines mit eingerollten Innenblättern.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,12 +22,20 @@ export interface BuildOptions {
   maxWidth?: number;
 }
 
-export function buildAtlas(inputPath: string, outDir: string, opts: BuildOptions = {}): PetalAtlas {
+export function buildAtlas(inputPaths: string | string[], outDir: string, opts: BuildOptions = {}): PetalAtlas {
   const { minArea = 300, tolerance = 40, padding = 4, maxWidth = 2048 } = opts;
-  const src = loadPng(inputPath);
-  removeBackground(src, tolerance);
-  const blobs = findBlobs(src, minArea);
-  if (blobs.length === 0) throw new Error("Keine Blütenblätter gefunden. Hintergrund zu unruhig oder Toleranz zu klein?");
+  const paths = Array.isArray(inputPaths) ? inputPaths : [inputPaths];
+
+  // Blobs aller Eingabebilder einsammeln; jeder Blob merkt sich sein Quellbild.
+  const entries: { blob: ReturnType<typeof findBlobs>[number]; src: ReturnType<typeof loadPng> }[] = [];
+  for (const path of paths) {
+    const src = loadPng(path);
+    removeBackground(src, tolerance);
+    const found = findBlobs(src, minArea);
+    if (found.length === 0) throw new Error(`Keine Blütenblätter in ${path} gefunden. Hintergrund zu unruhig oder Toleranz zu klein?`);
+    for (const blob of found) entries.push({ blob, src });
+  }
+  const blobs = entries.map((e) => e.blob);
 
   const { placed, width, height } = packShelves(
     blobs.map((b) => ({ w: b.w + padding * 2, h: b.h + padding * 2 })),
@@ -35,7 +44,7 @@ export function buildAtlas(inputPath: string, outDir: string, opts: BuildOptions
   );
 
   const atlas = createImage(width, height);
-  const sprites: AtlasSprite[] = blobs.map((blob, i) => {
+  const sprites: AtlasSprite[] = entries.map(({ blob, src }, i) => {
     const slot = placed[i]!;
     // Nur die Pixel dieses Blobs kopieren, damit sich überlappende Bounding-Boxen nicht stören.
     for (const p of blob.pixels) {
@@ -114,9 +123,14 @@ function debugImage(atlas: ReturnType<typeof createImage>, sprites: AtlasSprite[
 
 // CLI
 if (process.argv[1] && /build-atlas\.ts$/.test(process.argv[1])) {
-  const [input, name, ...rest] = process.argv.slice(2);
-  if (!input || !name) {
-    console.error("Aufruf: npx tsx tools/build-atlas.ts <eingabe.png> <name> [--min-area N] [--tolerance N]");
+  const args = process.argv.slice(2);
+  const flagStart = args.findIndex((a) => a.startsWith("--"));
+  const positional = flagStart >= 0 ? args.slice(0, flagStart) : args;
+  const rest = flagStart >= 0 ? args.slice(flagStart) : [];
+  const name = positional[positional.length - 1];
+  const inputs = positional.slice(0, -1);
+  if (inputs.length === 0 || !name) {
+    console.error("Aufruf: npx tsx tools/build-atlas.ts <eingabe.png> [weitere.png ...] <name> [--min-area N] [--tolerance N]");
     process.exit(1);
   }
   const opt = (flag: string) => {
@@ -124,7 +138,7 @@ if (process.argv[1] && /build-atlas\.ts$/.test(process.argv[1])) {
     return i >= 0 ? Number(rest[i + 1]) : undefined;
   };
   const outDir = join("public", "rose", name);
-  const atlas = buildAtlas(input, outDir, { minArea: opt("--min-area"), tolerance: opt("--tolerance") });
+  const atlas = buildAtlas(inputs, outDir, { minArea: opt("--min-area"), tolerance: opt("--tolerance") });
   console.log(`${atlas.sprites.length} Blätter -> ${outDir} (${atlas.width}x${atlas.height})`);
   for (const [i, s] of atlas.sprites.entries()) {
     console.log(`  #${i}: ${s.w}x${s.h} Länge ${s.length} Breite ${s.width} Pivot (${s.pivot.x.toFixed(0)},${s.pivot.y.toFixed(0)}) Rotation ${s.rotation}°`);

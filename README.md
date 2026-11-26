@@ -66,8 +66,9 @@ Schritte in `tools/build-atlas.ts`:
    Pivot, Rotation, Länge und Breite. `atlas-debug.png` zeigt Pivot (Kreuz) und Achse (Linie) zur Kontrolle.
 
 `tools/lib/fixture.test.ts` prüft Pivot und Winkel gegen die bekannten Werte des synthetischen Sheets,
-`tools/lib/ai-fixture.test.ts` gegen das ChatGPT-Sheet `tools/fixtures/ai/chatgpt-rose-petals.png` (alle Basen unten).
-Der daraus gebaute Atlas liegt unter `public/rose/rose1/` und ist mit `?rose=rose1` sichtbar.
+`tools/lib/ai-fixture.test.ts` gegen die ChatGPT-Sheets unter `tools/fixtures/ai/` (alle Basen unten).
+Atlanten: `rose1` (nur Außenblätter) und `rose2` (Außen- plus Innenblätter, beide Sheets in einem Atlas),
+sichtbar mit `?rose=rose1` bzw. `?rose=rose2`. Mehrere Sheets: `npm run atlas -- a.png b.png name`.
 
 Im Frontend wählt `?rose=<name>` den Atlas unter `public/rose/<name>/`. Ohne Parameter bleibt die SVG-Rose.
 `src/rose/sprite-model.ts` verteilt die Sprites auf die Ringe (kurze, schmale nach innen), der Renderer schneidet

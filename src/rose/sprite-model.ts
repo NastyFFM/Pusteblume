@@ -1,6 +1,20 @@
 import type { PetalAtlas } from "../../shared/atlas";
 import type { RoseColor } from "../../shared/card";
-import { createRoseModel, type Petal, type RoseModel } from "./model";
+import { createRoseModel, type Petal, type RingSpec, type RoseModel } from "./model";
+
+/**
+ * Ringe für Sprite-Rosen. Innen mehr und größere Blätter als beim SVG-Modell, weil echte
+ * Innenblätter eingerollt und schmal sind und sich in der Mitte überlappen müssen.
+ */
+const SPRITE_RINGS: RingSpec[] = [
+  { count: 6, radius: 3, height: 34, openness: 0, tilt: 58 },
+  { count: 7, radius: 7, height: 40, openness: 0.08, tilt: 48 },
+  { count: 8, radius: 13, height: 46, openness: 0.22, tilt: 34 },
+  { count: 9, radius: 22, height: 52, openness: 0.42, tilt: 22 },
+  { count: 11, radius: 34, height: 57, openness: 0.62, tilt: 13 },
+  { count: 12, radius: 48, height: 62, openness: 0.84, tilt: 7 },
+  { count: 14, radius: 64, height: 66, openness: 1, tilt: 3 },
+];
 
 /**
  * Rosenmodell mit Sprite-Blättern aus einem Atlas.
@@ -10,7 +24,7 @@ import { createRoseModel, type Petal, type RoseModel } from "./model";
  * Blätter liegen.
  */
 export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color: RoseColor, seed = 7): RoseModel {
-  const base = createRoseModel(seed);
+  const base = createRoseModel(seed, SPRITE_RINGS);
   const url = baseUrl + (atlas.images[color] ?? atlas.images.red ?? "");
   // Sprites sortieren: schmale, eingerollte (hohe Länge/Breite) nach innen, breite offene nach außen.
   const sorted = [...atlas.sprites].sort((a, b) => b.length / Math.max(1, b.width) - a.length / Math.max(1, a.width) || a.length - b.length);
@@ -22,7 +36,7 @@ export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color:
     const t = p.ring / Math.max(1, rings - 1);
     const idx = Math.min(sorted.length - 1, Math.max(0, Math.round(t * (sorted.length - 1) + ((p.id * 7) % 3) - 1)));
     const sprite = sorted[idx]!;
-    const targetLength = ringHeight(p.ring);
+    const targetLength = SPRITE_RINGS[p.ring]?.height ?? 60;
     return {
       ...p,
       size: (targetLength / sprite.length) * p.size,
@@ -39,14 +53,6 @@ export function createSpriteRoseModel(atlas: PetalAtlas, baseUrl: string, color:
     };
   });
   return { ...base, petals };
-}
-
-/**
- * Blattlänge je Ring in Modell-Einheiten. Innen größer als beim SVG-Modell, weil echte
- * Innenblätter eingerollt und schmal sind und sich so in der Mitte überlappen müssen.
- */
-function ringHeight(ring: number): number {
-  return [34, 40, 46, 52, 57, 62, 66][ring] ?? 60;
 }
 
 export async function loadAtlas(name: string): Promise<{ atlas: PetalAtlas; baseUrl: string }> {
