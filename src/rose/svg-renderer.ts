@@ -43,8 +43,8 @@ const MAX_MOTION_BLUR = 8;
  * Beleuchtung und Schattierung bleiben. Wird von main.ts über ?fx=lite gesetzt.
  */
 export const FX = {
-  /** keine SVG-Filter (Tiefenschärfe, Bewegungsunschärfe) */
-  lite: false,
+  /** keine SVG-Filter (Tiefenschärfe, Bewegungsunschärfe). Standard an: Filter flackern auf Handys. */
+  lite: true,
   /** Schattierungskopien (multiply/screen) pro Blatt */
   shade: true,
   /**

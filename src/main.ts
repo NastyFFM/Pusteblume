@@ -30,11 +30,11 @@ function writeJson(key: string, value: unknown) {
 
 let activeView: { destroy(): void } | null = null;
 
-// ?fx=lite,noshade,nosort | off: Effekte zum Eingrenzen von Darstellungsproblemen abschalten
+// ?fx=filters schaltet SVG-Filter ein (flackern auf manchen Handys); noshade,nosort | off schalten weitere Effekte ab
 {
   const fx = new Set((new URLSearchParams(location.search).get("fx") ?? "").split(",").map((t) => t.trim()).filter(Boolean));
   const off = fx.has("off");
-  FX.lite = off || fx.has("lite");
+  FX.lite = off || !fx.has("filters");
   FX.shade = !(off || fx.has("noshade"));
   FX.resortDegrees = off || fx.has("nosort") ? Infinity : fx.has("sortalways") ? 0 : 30;
   document.documentElement.dataset.fx = [...fx].join(" ");
