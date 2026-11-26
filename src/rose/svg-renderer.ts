@@ -51,7 +51,9 @@ const DOF_FAR = "url(#dof-far)";
  * bis auf diese Abweichung tiefenrichtig ist, wird nichts im DOM umgehängt. Verhindert
  * Dauer-Umsortieren bei leicht zitternder Kamera (Lagesensor).
  */
-const SORT_EPSILON = 1.5;
+const SORT_EPSILON = 2.5;
+/** Hysterese der Tiefenstufen in Listenplätzen: ein Blatt wechselt die Stufe erst, wenn es so weit über der Grenze liegt. */
+const TIER_HYSTERESIS = 2;
 
 /** DOM-Knoten eines Blatts samt gecachtem Zustand, damit pro Frame nur geänderte Attribute geschrieben werden. */
 interface PetalNode {
@@ -189,37 +191,45 @@ export class RoseSvg {
 
   /**
    * Blattgruppen nach Tiefe ordnen: ferne zuerst, nahe zuletzt. Fliegende Blätter ganz oben.
-   * Umgehängt wird nur, wenn die bestehende Reihenfolge nicht mehr (bis auf SORT_EPSILON)
-   * tiefenrichtig ist; jedes appendChild lässt den Browser die Blattgruppe neu aufbauen.
+   * Umsortiert wird nur, wenn die bestehende Reihenfolge nicht mehr (bis auf SORT_EPSILON)
+   * tiefenrichtig ist, und dann werden nur die Knoten verschoben, die tatsächlich an falscher
+   * Stelle stehen: jedes Umhängen lässt den Browser die Blattgruppe neu aufbauen.
    * Bei einer Neusortierung bekommen die sitzenden Blätter ihre Tiefenschärfe-Stufe
-   * (Drittel nach Tiefe); Filter und Helligkeit ändern sich also nur bei echtem Kamerawechsel
-   * bzw. wenn ein Blatt zu fliegen beginnt oder wieder sitzt.
+   * (Drittel nach Tiefe, mit Hysterese); Filter und Helligkeit ändern sich also nur bei
+   * echtem Kamerawechsel bzw. wenn ein Blatt zu fliegen beginnt oder wieder sitzt.
    */
   private sortByDepth() {
     if (!this.sortDirty) return;
     this.sortDirty = false;
     if (this.orderStillValid()) return;
-    const sorted = [...this.model.petals].sort((a, b) => {
-      const da = this.depths.get(a.id) ?? 0;
-      const db = this.depths.get(b.id) ?? 0;
-      return da - db || b.ring - a.ring;
-    });
+    const { order: sorted, moved } = this.nextOrder();
     this.order = sorted.map((p) => p.id);
     const attached = sorted.filter((p) => this.lastPose.get(p.id)?.pose === undefined);
-    const third = attached.length / 3;
+    const b1 = attached.length / 3, b2 = (2 * attached.length) / 3;
     attached.forEach((petal, i) => {
       const node = this.petalNodes.get(petal.id);
       if (!node) return;
-      const tier: DepthTier = i < third ? "far" : i < 2 * third ? "mid" : "near";
+      // Stufe mit Hysterese: erst wechseln, wenn der Listenplatz deutlich über der Grenze liegt.
+      const h = TIER_HYSTERESIS;
+      let tier: DepthTier = i < b1 ? "far" : i < b2 ? "mid" : "near";
+      if (node.tier === "far" && i < b1 + h) tier = "far";
+      else if (node.tier === "near" && i >= b2 - h) tier = "near";
+      else if (node.tier === "mid" && i >= b1 - h && i < b2 + h) tier = "mid";
       if (tier !== node.tier) {
         node.tier = tier;
         node.shade = -1; // Helligkeit beim nächsten Frame neu setzen
       }
       this.applyFilter(node, TIER_FILTER[tier]);
     });
-    for (const petal of sorted) {
+    // Nur die Ausreißer umhängen, von hinten nach vorn: ihr Nachfolger in der Zielreihenfolge
+    // steht dann schon richtig (unverändertes Blatt oder bereits eingefügter Ausreißer).
+    const index = new Map(sorted.map((p, i) => [p.id, i]));
+    moved.sort((a, b) => index.get(b.id)! - index.get(a.id)!);
+    for (const petal of moved) {
       const node = this.petalNodes.get(petal.id);
-      if (node) this.petalLayer.appendChild(node.g);
+      if (!node) continue;
+      const next = sorted[index.get(petal.id)! + 1];
+      this.petalLayer.insertBefore(node.g, next ? this.petalNodes.get(next.id)?.g ?? null : null);
     }
   }
 
@@ -233,6 +243,42 @@ export class RoseSvg {
       if (d > max) max = d;
     }
     return true;
+  }
+
+  /**
+   * Neue Reihenfolge aus der bestehenden ableiten: Blätter, die innerhalb der Toleranz
+   * tiefenrichtig stehen, bleiben, wo sie sind; nur die Ausreißer werden an ihre
+   * Tiefenposition einsortiert. So wandern pro Frame nur wenige Knoten im DOM.
+   */
+  private nextOrder(): { order: Petal[]; moved: Petal[] } {
+    const byId = new Map(this.model.petals.map((p) => [p.id, p]));
+    const depth = (p: Petal) => this.depths.get(p.id) ?? 0;
+    const kept: Petal[] = [];
+    const moved: Petal[] = [];
+    let max = -Infinity;
+    const current = this.order.length === this.petalNodes.size ? this.order : this.model.petals.map((p) => p.id);
+    for (const id of current) {
+      const p = byId.get(id);
+      if (!p) continue;
+      const d = depth(p);
+      if (d < max - SORT_EPSILON) moved.push(p);
+      else {
+        kept.push(p);
+        if (d > max) max = d;
+      }
+    }
+    for (const p of moved) {
+      // erste Position, deren Tiefe größer ist (binäre Suche)
+      const d = depth(p);
+      let lo = 0, hi = kept.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (depth(kept[mid]!) <= d) lo = mid + 1;
+        else hi = mid;
+      }
+      kept.splice(lo, 0, p);
+    }
+    return { order: kept, moved };
   }
 
   /**
