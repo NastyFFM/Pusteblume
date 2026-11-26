@@ -47,8 +47,12 @@ export const FX = {
   lite: false,
   /** Schattierungskopien (multiply/screen) pro Blatt */
   shade: true,
-  /** Tiefensortierung zur Laufzeit (Umhängen im DOM); false = nur Anfangsreihenfolge */
-  resort: true,
+  /**
+   * Tiefensortierung zur Laufzeit: Kamerabewegung in Grad, ab der die Blätter im DOM neu
+   * geordnet werden. Jedes Umhängen lässt manche Handys einen Frame lang Blätter auslassen,
+   * daher selten und in großen Schritten. Infinity = nur Anfangsreihenfolge, 0 = jeder Frame.
+   */
+  resortDegrees: 30,
 };
 
 /** Tiefenschärfe-Stufe eines sitzenden Blatts: hinten leicht unscharf, Mitte normal, vorn scharf */
@@ -125,6 +129,8 @@ export class RoseSvg {
   private innerShadeLift = 0;
   private color: RoseColor;
   private camera: Camera;
+  /** Kamera bei der letzten Tiefensortierung */
+  private sortCamera: Camera;
   private sortDirty = true;
 
   constructor(
@@ -135,6 +141,7 @@ export class RoseSvg {
   ) {
     this.color = color;
     this.camera = { elevation: model.defaultElevation, azimuth: 0 };
+    this.sortCamera = { ...this.camera };
     for (const petal of model.petals) {
       this.placements.set(petal.id, placePetal(petal.angle, petal.radius, petal.elevation, petal.lift, petal.tilt, petal.length));
     }
@@ -184,7 +191,10 @@ export class RoseSvg {
   setCamera(camera: Camera) {
     if (camera.elevation === this.camera.elevation && camera.azimuth === this.camera.azimuth) return;
     this.camera = { elevation: camera.elevation, azimuth: camera.azimuth };
-    this.sortDirty = true;
+    // Neu sortieren erst, wenn die Kamera seit der letzten Sortierung deutlich gewandert ist.
+    const dAz = Math.abs(((camera.azimuth - this.sortCamera.azimuth + 540) % 360) - 180);
+    const dEl = Math.abs(camera.elevation - this.sortCamera.elevation);
+    if (Math.max(dAz, dEl) >= FX.resortDegrees) this.sortDirty = true;
     this.applyCamera();
   }
 
@@ -214,7 +224,7 @@ export class RoseSvg {
   private sortByDepth() {
     if (!this.sortDirty) return;
     this.sortDirty = false;
-    if (!FX.resort && this.order.length > 0) return;
+    this.sortCamera = { ...this.camera };
     if (this.orderStillValid()) return;
     const { order: sorted, moved } = this.nextOrder();
     this.order = sorted.map((p) => p.id);

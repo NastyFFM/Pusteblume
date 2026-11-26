@@ -36,7 +36,7 @@ let activeView: { destroy(): void } | null = null;
   const off = fx.has("off");
   FX.lite = off || fx.has("lite");
   FX.shade = !(off || fx.has("noshade"));
-  FX.resort = !(off || fx.has("nosort"));
+  FX.resortDegrees = off || fx.has("nosort") ? Infinity : fx.has("sortalways") ? 0 : 30;
   document.documentElement.dataset.fx = [...fx].join(" ");
 }
 

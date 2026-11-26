@@ -110,7 +110,9 @@ Die SVG-Rose bleibt eine reine Draufsicht.
   Azimut horizontal umlaufend, Höhenwinkel vertikal. Neues Panorama aufbereiten:
   `node tools/make-env.cjs <panorama.png> public/env/room.jpg 1536 14` (Breite, Blur-Radius).
 - `?fx=lite` schaltet alle SVG-Filter ab (Tiefenschärfe, Bewegungsunschärfe), `?fx=lite,noshade` zusätzlich
-  die Schattierungskopien, `?fx=off` alle neuen Effekte inklusive Umgebung, falls ein Gerät ruckelt.
+  die Schattierungskopien, `?fx=off` alle neuen Effekte inklusive Umgebung, falls ein Gerät ruckelt. Die Tiefensortierung
+  hängt Blätter nur um, wenn die Kamera seit der letzten Sortierung ≥ 30° gewandert ist (`nosort`: nie,
+  `sortalways`: jeden Frame), weil jedes Umhängen auf manchen Handys Blätter einen Frame lang ausblendet.
 
 ## Debug-Haken
 
