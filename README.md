@@ -77,6 +77,18 @@ jeden Ausschnitt per verschachteltem `<svg viewBox>` aus dem Atlasbild.
 Neues Blättersheet ohne Key: Prompt aus `tools/generate-petals.ts` in ChatGPT eingeben, PNG speichern,
 `npm run atlas -- <bild.png> <name>`. Mit Vercel-AI-Gateway-Key erzeugt `tools/generate-petals.ts` das Bild direkt (noch ungetestet).
 
+## Schrägansicht und Neigung
+
+Sprite-Rosen werden in Pseudo-3D gezeichnet (`src/rose/projection.ts`): Jedes Blatt ist eine flache Fläche
+mit Pivot am Blütenboden, Neigung je Ring (innen fast senkrecht, außen aufgeklappt) und Breitenachse.
+Eine orthografische Kamera mit Höhenwinkel und Azimut projiziert sie auf eine SVG-`matrix()`; die Blätter
+werden pro Frame nach Tiefe sortiert. Standard ist eine Dreiviertel-Ansicht (48°).
+
+Die Kamera folgt der Handy-Neigung (`src/view/tilt.ts`, DeviceOrientation, auf iOS mit Erlaubnis-Abfrage
+beim Start): flach gehalten Blick von oben, aufrecht von der Seite, seitliches Kippen dreht die Rose.
+Am Desktop steuert die Maus über der Bühne. `window.__pusteblume.setView(höhe, azimut)` setzt sie direkt.
+Die SVG-Rose bleibt eine reine Draufsicht.
+
 ## Debug-Haken
 
 In der Kartenansicht steht `window.__pusteblume` bereit: `blow(0..1)` löst einen Windstoß aus,

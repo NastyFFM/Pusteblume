@@ -125,6 +125,9 @@ p { margin: 0; }
 .msg--m  .card__text { font-size: clamp(1rem, 4.4vw, 1.3rem); }
 .msg--s  .card__text { font-size: clamp(0.82rem, 3.6vw, 1.05rem); }
 
+/* Schrägansicht: Die Botschaft liegt unter der Blüte und erscheint erst, wenn das letzte Blatt fällt. */
+.card--3d .card__message { width: 50%; opacity: 0; transition: opacity 0.9s ease, width 0.9s cubic-bezier(.2,.8,.2,1), aspect-ratio 0.9s ease, border-radius 0.9s ease, padding 0.9s ease; }
+.card--3d.card--revealed .card__message { opacity: 1; }
 .card--revealed .card__message { width: 100%; aspect-ratio: auto; border-radius: var(--radius); padding: 1.6rem 1.4rem; animation: glow 1.4s ease-out; }
 .card--revealed .card__stage .rose { pointer-events: none; }
 

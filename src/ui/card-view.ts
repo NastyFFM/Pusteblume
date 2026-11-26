@@ -3,6 +3,7 @@ import { BlowDetector, GestureBlow } from "../blow/detector";
 import { h } from "../dom";
 import { RosePhysics } from "../rose/physics";
 import { createRose, type RoseStyle } from "../rose/factory";
+import { TiltCamera } from "../view/tilt";
 
 export interface CardViewOptions {
   /** Zurück-Aktion (z. B. im Vorschau-Modus) */
@@ -23,6 +24,8 @@ function messageSizeClass(message: string) {
 
 export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewOptions = {}) {
   const { model, rose } = createRose(card.color, opts.style);
+  const threeD = model.defaultElevation < 90;
+  const tilt = new TiltCamera(rose.getCamera());
   const mic = new BlowDetector();
   const gesture = new GestureBlow();
 
@@ -58,7 +61,7 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
 
   const back = opts.onBack ? h("button", { class: "btn btn--link card__back", onClick: () => opts.onBack?.() }, opts.backLabel ?? "Zurück") : null;
 
-  const view = h("section", { class: `card card--${card.color}` }, back, stage, hint, meter, done, intro);
+  const view = h("section", { class: `card card--${card.color}${threeD ? " card--3d" : ""}` }, back, stage, hint, meter, done, intro);
   root.replaceChildren(view);
 
   // --- Interaktion -----------------------------------------------------------
@@ -94,6 +97,8 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     meterFill.style.transform = `scaleX(${intensity.toFixed(3)})`;
     stage.style.setProperty("--blow", intensity.toFixed(3));
 
+    if (threeD && tilt.update(dt)) rose.setCamera(tilt.camera);
+
     physics.step(dt, intensity, (petal, pose, tremble) => {
       if (pose) rose.setPose(petal, pose);
       else if (Math.abs(tremble) > 0.01) rose.setTremble(petal, tremble);
@@ -108,6 +113,10 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     intro.remove();
     view.classList.add("card--active");
     gesture.attach(stage);
+    if (threeD) {
+      tilt.attach(stage);
+      void tilt.requestPermission();
+    }
     if (next === "gesture") hint.textContent = "Wische kräftig über die Blume …";
     last = performance.now();
     cancelAnimationFrame(raf);
@@ -171,6 +180,10 @@ export function mountCardView(root: HTMLElement, card: CardData, opts: CardViewO
     },
     get micLevel() {
       return mic.levelDb;
+    },
+    setView: (elevation: number, azimuth: number) => {
+      tilt.set({ elevation, azimuth });
+      rose.setCamera({ elevation, azimuth });
     },
   };
 

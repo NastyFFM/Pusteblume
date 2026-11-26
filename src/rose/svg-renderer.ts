@@ -1,5 +1,6 @@
 import type { RoseColor } from "../../shared/card";
 import { HEART_RING, PALETTES, type Petal, type RoseModel } from "./model";
+import { discMatrix, petalMatrix, placePetal, type Camera, type Placement3D } from "./projection";
 
 export interface PetalPose {
   /** Verschiebung des Pivots gegenüber der Ruhelage */
@@ -30,10 +31,18 @@ export class RoseSvg {
   /** Blätter (liegen hinter der Botschaft) */
   readonly backEl: SVGSVGElement;
   private readonly petalGroups = new Map<number, SVGGElement>();
+  private readonly placements = new Map<number, Placement3D>();
+  private readonly depths = new Map<number, number>();
+  /** zuletzt gesetzte Pose je Blatt, damit ein Kamerawechsel sie neu projizieren kann */
+  private readonly lastPose = new Map<number, { pose?: PetalPose; tremble: number }>();
+  private readonly leafGroups: { g: SVGGElement; placement: Placement3D }[] = [];
   private readonly defs: SVGDefsElement;
   private readonly petalLayer: SVGGElement;
-  private backing!: SVGCircleElement;
+  private backing!: SVGEllipseElement;
+  private backingRadius = 0;
   private color: RoseColor;
+  private camera: Camera;
+  private sortDirty = true;
 
   constructor(
     private readonly model: RoseModel,
@@ -42,6 +51,10 @@ export class RoseSvg {
     private readonly atlasSize: { width: number; height: number } = { width: 0, height: 0 },
   ) {
     this.color = color;
+    this.camera = { elevation: model.defaultElevation, azimuth: 0 };
+    for (const petal of model.petals) {
+      this.placements.set(petal.id, placePetal(petal.angle, petal.radius, petal.elevation, petal.lift, petal.tilt, petal.length));
+    }
     this.el = el("svg", {
       viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`,
       class: "rose",
@@ -55,11 +68,55 @@ export class RoseSvg {
     this.backEl = el("svg", { viewBox: `${-VIEW} ${-VIEW} ${VIEW * 2} ${VIEW * 2}`, class: "rose rose--back", "aria-hidden": "true" });
     this.backEl.appendChild(this.buildLeaves());
     // Deckscheibe hinter den Blättern: verdeckt Lücken zwischen Sprites, blendet mit dem Fortschritt aus.
-    this.backing = el("circle", { class: "rose__backing", cx: 0, cy: 0, r: model.radius * 0.62, fill: "url(#backing-grad)" });
+    // In der Schrägansicht etwas größer, weil die Blüte dort vertikal gestaucht erscheint.
+    const backingR = model.radius * (model.defaultElevation < 90 ? 0.82 : 0.62);
+    this.backingRadius = backingR;
+    this.backing = el("ellipse", { class: "rose__backing", cx: 0, cy: 0, rx: backingR, ry: backingR, fill: "url(#backing-grad)" });
     this.el.appendChild(this.backing);
     this.petalLayer = el("g", { class: "rose__petals" });
     this.el.appendChild(this.petalLayer);
     this.buildPetals();
+    this.applyCamera();
+  }
+
+  /** Aktuelle Kamera (Höhenwinkel, Azimut). */
+  getCamera(): Camera {
+    return { ...this.camera };
+  }
+
+  /** Kamera setzen und alle Blätter, Blätter und Scheiben neu projizieren. */
+  setCamera(camera: Camera) {
+    if (camera.elevation === this.camera.elevation && camera.azimuth === this.camera.azimuth) return;
+    this.camera = { elevation: camera.elevation, azimuth: camera.azimuth };
+    this.sortDirty = true;
+    this.applyCamera();
+  }
+
+  private applyCamera() {
+    this.backing.setAttribute("transform", discMatrix(this.camera, 1));
+    for (const { g, placement } of this.leafGroups) g.setAttribute("transform", petalMatrix(placement, this.camera, 1).matrix);
+    for (const petal of this.model.petals) {
+      const last = this.lastPose.get(petal.id);
+      if (last?.pose) this.setPose(petal, last.pose);
+      else if (last?.tremble) this.setTremble(petal, last.tremble);
+      else this.setPose(petal);
+    }
+    this.sortByDepth();
+  }
+
+  /** Blattgruppen nach Tiefe ordnen: ferne zuerst, nahe zuletzt. Fliegende Blätter ganz oben. */
+  private sortByDepth() {
+    if (!this.sortDirty) return;
+    this.sortDirty = false;
+    const order = [...this.model.petals].sort((a, b) => {
+      const da = this.depths.get(a.id) ?? 0;
+      const db = this.depths.get(b.id) ?? 0;
+      return da - db || b.ring - a.ring;
+    });
+    for (const petal of order) {
+      const g = this.petalGroups.get(petal.id);
+      if (g) this.petalLayer.appendChild(g);
+    }
   }
 
   setColor(color: RoseColor, spriteUrl?: string) {
@@ -74,12 +131,17 @@ export class RoseSvg {
   /** Pose eines Blatts setzen; `pose` undefined = Ruhelage. */
   setPose(petal: Petal, pose?: PetalPose) {
     const g = this.petalGroups.get(petal.id);
-    if (!g) return;
-    const base = `rotate(${petal.angle}) translate(0 ${-petal.radius}) rotate(${petal.tilt}) scale(${petal.size})`;
+    const placement = this.placements.get(petal.id);
+    if (!g || !placement) return;
+    const wasFlying = this.lastPose.get(petal.id)?.pose !== undefined;
+    this.lastPose.set(petal.id, { pose, tremble: 0 });
     if (!pose) {
-      g.setAttribute("transform", base);
+      const { matrix, depth } = petalMatrix(placement, this.camera, petal.size);
+      g.setAttribute("transform", matrix);
       g.style.opacity = "";
       g.style.display = "";
+      this.depths.set(petal.id, depth);
+      if (wasFlying) this.sortDirty = true;
       return;
     }
     if (pose.alpha <= 0) {
@@ -88,26 +150,42 @@ export class RoseSvg {
     }
     g.style.display = "";
     g.style.opacity = pose.alpha.toFixed(3);
-    g.setAttribute(
-      "transform",
-      `translate(${pose.dx.toFixed(2)} ${pose.dy.toFixed(2)}) rotate(${petal.angle}) translate(0 ${-petal.radius}) rotate(${(petal.tilt + pose.rot).toFixed(2)}) scale(${(petal.size * pose.scale).toFixed(3)})`,
-    );
-  }
-
-  /** Fortschritt 0..1 (Anteil gelöster Blätter): Deckscheibe ab 55 % ausblenden. */
-  setProgress(progress: number) {
-    const o = 1 - Math.max(0, Math.min(1, (progress - 0.55) / 0.35));
-    this.backing.style.opacity = o.toFixed(3);
+    const { matrix, depth } = petalMatrix(placement, this.camera, petal.size * pose.scale, pose.rot);
+    g.setAttribute("transform", `translate(${pose.dx.toFixed(2)} ${pose.dy.toFixed(2)}) ${matrix}`);
+    // Fliegende Blätter kommen dem Betrachter entgegen: immer vor den sitzenden zeichnen.
+    this.depths.set(petal.id, depth + 1000);
+    if (!wasFlying) this.sortDirty = true;
+    this.sortByDepth();
   }
 
   /** Leichtes Zittern eines sitzenden Blatts (Feedback beim sanften Pusten). */
   setTremble(petal: Petal, degrees: number) {
     const g = this.petalGroups.get(petal.id);
-    if (!g) return;
-    g.setAttribute(
-      "transform",
-      `rotate(${petal.angle}) translate(0 ${-petal.radius}) rotate(${(petal.tilt + degrees).toFixed(2)}) scale(${petal.size})`,
-    );
+    const placement = this.placements.get(petal.id);
+    if (!g || !placement) return;
+    const wasFlying = this.lastPose.get(petal.id)?.pose !== undefined;
+    this.lastPose.set(petal.id, { tremble: degrees });
+    const { matrix, depth } = petalMatrix(placement, this.camera, petal.size, degrees);
+    g.setAttribute("transform", matrix);
+    g.style.opacity = "";
+    g.style.display = "";
+    this.depths.set(petal.id, depth);
+    if (wasFlying) this.sortDirty = true;
+  }
+
+  /** Fortschritt 0..1 (Anteil gelöster Blätter): Deckscheibe gegen Ende ausblenden. */
+  setProgress(progress: number) {
+    // In der Schrägansicht verdeckt die Scheibe auch die Botschaft und bleibt daher länger.
+    const threeD = this.model.defaultElevation < 90;
+    const [from, to] = threeD ? [0.72, 0.97] : [0.55, 0.9];
+    const o = 1 - Math.max(0, Math.min(1, (progress - from) / (to - from)));
+    this.backing.style.opacity = o.toFixed(3);
+    if (threeD) {
+      // Scheibe schrumpft mit der verbleibenden Blütenmasse (äußere Blätter gehen zuerst).
+      const r = this.backingRadius * (1 - 0.6 * Math.max(0, Math.min(1, progress)));
+      this.backing.setAttribute("rx", r.toFixed(1));
+      this.backing.setAttribute("ry", r.toFixed(1));
+    }
   }
 
   private buildDefs() {
@@ -131,11 +209,13 @@ export class RoseSvg {
     const leaf = el("linearGradient", { id: "leaf-grad", x1: 0, y1: 1, x2: 0, y2: 0 });
     leaf.append(el("stop", { offset: 0, "stop-color": "#1d4a24" }), el("stop", { offset: 1, "stop-color": "#4f8a3e" }));
 
+    // Deckscheibe: dunkle Mitte, zum Rand hin Blattfarbe, damit sie durch Lücken wie Blütenmasse wirkt.
     const backing = el("radialGradient", { id: "backing-grad" });
     backing.append(
       el("stop", { offset: 0, "stop-color": pal.heart }),
-      el("stop", { offset: 0.8, "stop-color": pal.deep }),
-      el("stop", { offset: 1, "stop-color": pal.deep, "stop-opacity": 0 }),
+      el("stop", { offset: 0.45, "stop-color": pal.deep }),
+      el("stop", { offset: 0.85, "stop-color": pal.base }),
+      el("stop", { offset: 1, "stop-color": pal.base, "stop-opacity": 0 }),
     );
 
     const shadow = el("filter", { id: "petal-shadow", x: "-30%", y: "-30%", width: "160%", height: "160%" });
@@ -149,9 +229,10 @@ export class RoseSvg {
   private buildLeaves(): SVGGElement {
     const layer = el("g", { class: "rose__leaves" });
     for (const leaf of this.model.leaves) {
-      const g = el("g", {
-        transform: `rotate(${leaf.angle}) translate(0 ${-leaf.radius}) rotate(${leaf.tilt}) scale(${leaf.size})`,
-      });
+      // Blätter liegen leicht hängend um den Blütenboden.
+      const placement = placePetal(leaf.angle, leaf.radius, -8, -6, leaf.tilt, 80);
+      const g = el("g", { transform: petalMatrix(placement, this.camera, leaf.size).matrix });
+      this.leafGroups.push({ g, placement });
       g.append(
         el("path", { d: leaf.d, fill: "#2f6b2f", stroke: "#163a1c", "stroke-width": 1.2, "stroke-linejoin": "round" }),
         el("path", { d: leaf.vein, stroke: "#9cc77f", "stroke-width": 1, "stroke-opacity": 0.6, fill: "none" }),
@@ -208,7 +289,6 @@ export class RoseSvg {
       g.appendChild(shapeGroup);
       this.petalLayer.appendChild(g);
       this.petalGroups.set(petal.id, g);
-      this.setPose(petal);
     }
   }
 }

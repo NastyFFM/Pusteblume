@@ -49,6 +49,12 @@ export interface Petal {
   tilt: number;
   /** Reihenfolge beim Wegfliegen, 0..1 (außen zuerst) */
   releaseAt: number;
+  /** Neigung gegen die Horizontale in Grad (90 = senkrecht stehend), für die 3D-Ansicht */
+  elevation: number;
+  /** Höhe der Basis über dem Blütenboden, für die 3D-Ansicht */
+  lift: number;
+  /** Blattlänge in Modell-Einheiten */
+  length: number;
   shape: PetalShape;
 }
 
@@ -64,6 +70,8 @@ export interface Leaf {
 export interface RoseModel {
   /** Blüten-Radius in Modell-Einheiten (viewBox ist -150..150) */
   radius: number;
+  /** Standard-Kamera: Höhenwinkel in Grad (90 = von oben) */
+  defaultElevation: number;
   petals: Petal[];
   leaves: Leaf[];
 }
@@ -133,6 +141,10 @@ export interface RingSpec {
   height: number;
   openness: number;
   tilt: number;
+  /** Neigung der Blätter gegen die Horizontale in Grad (3D-Ansicht); 0 = flach liegend */
+  elevation?: number;
+  /** Höhe der Blattbasis (3D-Ansicht) */
+  lift?: number;
 }
 
 /** Ringe von innen nach außen (SVG-Rose). */
@@ -149,7 +161,7 @@ export const SVG_RINGS: RingSpec[] = [
 /** Ring-Index der Herzscheibe: liegt über Ring 2, unter Ring 0 und 1. */
 export const HEART_RING = 1.5;
 
-export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS): RoseModel {
+export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS, defaultElevation = 90): RoseModel {
   const rnd = mulberry32(seed);
   const petals: Petal[] = [];
   let id = 0;
@@ -168,6 +180,9 @@ export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS): RoseMo
         // Alle Blätter drehen in dieselbe Richtung: ergibt die typische Rosen-Spirale.
         tilt: ring.tilt + (rnd() - 0.5) * 8,
         releaseAt: 0, // wird unten gesetzt
+        elevation: ring.elevation ?? 0,
+        lift: ring.lift ?? 0,
+        length: ring.height,
         shape: { kind: "path", d, rim, pivot: { x: 0, y: 0 } },
       });
     }
@@ -183,6 +198,9 @@ export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS): RoseMo
     size: 1,
     tilt: 0,
     releaseAt: 1,
+    elevation: 0,
+    lift: RINGS[0]?.lift ?? 0,
+    length: heartR * 2,
     shape: {
       kind: "path",
       d: `M ${-heartR} 0 a ${heartR} ${heartR} 0 1 0 ${heartR * 2} 0 a ${heartR} ${heartR} 0 1 0 ${-heartR * 2} 0 Z`,
@@ -200,7 +218,7 @@ export function createRoseModel(seed = 7, RINGS: RingSpec[] = SVG_RINGS): RoseMo
   });
 
   const outer = RINGS[RINGS.length - 1]!;
-  return { radius: outer.radius + outer.height * 0.95, petals, leaves };
+  return { radius: outer.radius + outer.height * 0.95, defaultElevation, petals, leaves };
 }
 
 /** Weltposition des Pivots eines Blatts (Blütenmitte = Ursprung, Winkel 0 = oben). */
